@@ -1,9 +1,6 @@
 #include "MirrorDriverClient.h"
 #include "Exception.h"
 
-#include <QLoggingCategory>
-Q_LOGGING_CATEGORY(logMirrorDriverClient, "log.desktop.MirrorDriverClient")
-
 const TCHAR MirrorDriverClient::MINIPORT_REGISTRY_PATH[] =
   _T("SYSTEM\\CurrentControlSet\\Hardware Profiles\\")
   _T("Current\\System\\CurrentControlSet\\Services");
@@ -27,8 +24,7 @@ MirrorDriverClient::MirrorDriverClient() :
         load();
         connect();
       } catch (Exception &e) {
-        qCCritical(logMirrorDriverClient()) << "An error occured during the mirror driver initialization: "
-                                            << e.getMessage();
+        _ftprintf(stderr, _T("An error occured during the mirror driver initialization: %s\n"), e.getMessage());
       }
 }
 
@@ -37,8 +33,7 @@ MirrorDriverClient::~MirrorDriverClient()
     try {
         dispose();
       } catch (Exception &e) {
-        qCCritical(logMirrorDriverClient()) << "An error occured during the mirror driver deinitialization: "
-                                            << e.getMessage();
+        _ftprintf(stderr, _T("An error occured during the mirror driver deinitialization: %s\n"), e.getMessage());
       }
 }
 
@@ -61,9 +56,9 @@ void MirrorDriverClient::load()
 {
   _ASSERT(m_isDriverOpened);
   if (!m_isDriverLoaded) {
-    qCDebug(logMirrorDriverClient) << "Loading mirror driver...";
+     _ftprintf(stdout, _T("Loading mirror driver...\n"));
 
-    initScreenPropertiesByCurrent();
+     initScreenPropertiesByCurrent();
 
     WORD drvExtraSaved = m_deviceMode.dmDriverExtra;
     // IMPORTANT: we dont touch extension data and size
@@ -92,10 +87,10 @@ void MirrorDriverClient::load()
     if (!m_driverDC) {
       throw Exception(_T("Can't create device context on mirror driver"));
     }
-    qCInfo(logMirrorDriverClient) << "Device context is created";
+    _ftprintf(stdout, _T("Device context is created\n"));
 
     m_isDriverLoaded = true;
-    qCInfo(logMirrorDriverClient) << "Mirror driver is now loaded";
+    _ftprintf(stdout, _T("Mirror driver is now loaded\n"));
   }
 }
 
@@ -104,11 +99,11 @@ void MirrorDriverClient::unload()
   if (m_driverDC != 0) {
     DeleteDC(m_driverDC);
     m_driverDC = 0;
-    qCInfo(logMirrorDriverClient) << "The mirror driver device context released";
+    _ftprintf(stdout, _T("The mirror driver device context released\n"));
   }
 
   if (m_isDriverAttached) {
-    qCInfo(logMirrorDriverClient) << "Unloading mirror driver...";
+      _ftprintf(stdout, _T("Unloading mirror driver...\n"));
 
     setAttachToDesktop(false);
 
@@ -124,9 +119,9 @@ void MirrorDriverClient::unload()
 
     try {
       commitDisplayChanges(pdm);
-      qCInfo(logMirrorDriverClient) << "Mirror driver is unloaded";
+      _ftprintf(stdout, _T("Mirror driver is unloaded\n"));
     } catch (Exception &e) {
-      qCWarning(logMirrorDriverClient) << "Failed to unload the mirror driver: " <<e.getMessage();
+          _ftprintf(stderr, _T("Failed to unload the mirror driver:  %s\n"), e.getMessage());
     }
   }
 
@@ -139,7 +134,7 @@ void MirrorDriverClient::unload()
 
 void MirrorDriverClient::connect()
 {
-  qCInfo(logMirrorDriverClient) << "Try to connect to the mirror driver.";
+    _ftprintf(stdout, _T("Try to connect to the mirror driver.\n"));
   if (!m_isDriverConnected) {
     GETCHANGESBUF buf = {0};
     int res = ExtEscape(m_driverDC, dmf_esc_usm_pipe_map, 0, 0, sizeof(buf), (LPSTR)&buf);
@@ -160,7 +155,7 @@ void MirrorDriverClient::connect()
 
 void MirrorDriverClient::disconnect()
 {
-  qCInfo(logMirrorDriverClient) << "Try to disconnect the mirror driver.";
+     _ftprintf(stdout, _T("Try to disconnect the mirror driver.\n"));
   if (m_isDriverConnected) {
     GETCHANGESBUF buf;
     buf.buffer = m_changesBuffer;
@@ -168,7 +163,7 @@ void MirrorDriverClient::disconnect()
 
     int res = ExtEscape(m_driverDC, dmf_esc_usm_pipe_unmap, sizeof(buf), (LPSTR)&buf, 0, 0);
     if (res <= 0) {
-      qCCritical(logMirrorDriverClient) << "Can't unmap buffer: error code = " << res;
+        _ftprintf(stderr, _T("Can't unmap buffer: error code = %d\n"), res);
     }
     m_isDriverConnected = false;
   }
@@ -192,17 +187,16 @@ void MirrorDriverClient::extractDeviceInfo(TCHAR *driverName)
   memset(&m_deviceInfo, 0, sizeof(m_deviceInfo));
   m_deviceInfo.cb = sizeof(m_deviceInfo);
 
-  qCDebug(logMirrorDriverClient) << "Searching for" << driverName << " ...";
+  _ftprintf(stdout, _T("Searching for: %s\n"), driverName);
 
   m_deviceNumber = 0;
   BOOL result;
   while (result = EnumDisplayDevices(0, m_deviceNumber, &m_deviceInfo, 0)) {
-    qCDebug(logMirrorDriverClient) << "Found:" << QString::fromStdWString(std::wstring(m_deviceInfo.DeviceString));
-    qCDebug(logMirrorDriverClient) << "Name:" << QString::fromStdWString(std::wstring(m_deviceInfo.DeviceName));
-    qCDebug(logMirrorDriverClient) << "RegKey:" << QString::fromStdWString(std::wstring(m_deviceInfo.DeviceKey));
+      _ftprintf(stdout, _T("DeviceString:%s, DeviceName:%s, DeviceKey:%s\n"),
+                m_deviceInfo.DeviceString, m_deviceInfo.DeviceName, m_deviceInfo.DeviceKey);
     StringStorage deviceString(m_deviceInfo.DeviceString);
     if (deviceString.isEqualTo(driverName)) {
-        qCInfo(logMirrorDriverClient) << driverName << "is found";
+        _ftprintf(stdout, _T("%s is found\n"), driverName);
         break;
     }
     m_deviceNumber++;
@@ -227,10 +221,10 @@ void MirrorDriverClient::openDeviceRegKey(TCHAR *miniportName)
     }
   }
 
-  qCDebug(logMirrorDriverClient) << QString("Opening registry key %1\\%2\\%3")
-                                    .arg(MINIPORT_REGISTRY_PATH)
-                                    .arg(miniportName)
-                                    .arg(subKey.getString());
+  _ftprintf(stdout, _T("Opening registry key %s\\%s\\%s\n"),
+               MINIPORT_REGISTRY_PATH,
+               miniportName,
+               subKey.getString());
 
   RegistryKey regKeyServices(HKEY_LOCAL_MACHINE, MINIPORT_REGISTRY_PATH, true);
   RegistryKey regKeyDriver(&regKeyServices, miniportName, true);
@@ -287,7 +281,7 @@ void MirrorDriverClient::commitDisplayChanges(DEVMODE *pdm)
   // ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, NULL,
   //                         CDS_UPDATEREGISTRY, NULL)
   // And the 2000 does not work with DEVMODE that has the set DM_POSITION bit.
-  qCInfo(logMirrorDriverClient) << "commitDisplayChanges(1): " <<  QString::fromStdWString(std::wstring(m_deviceInfo.DeviceName));
+  _ftprintf(stdout, _T("commitDisplayChanges(1): %s\n"), m_deviceInfo.DeviceName);
 
   if (pdm) {
     LONG code = ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, 0, CDS_UPDATEREGISTRY, 0);
@@ -297,7 +291,8 @@ void MirrorDriverClient::commitDisplayChanges(DEVMODE *pdm)
                      (int)code);
       throw Exception(errMess.getString());
     }
-    qCInfo(logMirrorDriverClient) << "CommitDisplayChanges(2): " << QString::fromStdWString(std::wstring(m_deviceInfo.DeviceName));
+    _ftprintf(stdout, _T("commitDisplayChanges(2): %s\n"), m_deviceInfo.DeviceName);
+
     code = ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, 0, 0, 0);
     if (code < 0) {
       StringStorage errMess;
@@ -314,5 +309,5 @@ void MirrorDriverClient::commitDisplayChanges(DEVMODE *pdm)
       throw Exception(errMess.getString());
     }
   }
-  qCInfo(logMirrorDriverClient) <<"ChangeDisplaySettingsEx() was successfull";
+  _ftprintf(stdout, _T("ChangeDisplaySettingsEx() was successfull\n"));
 }

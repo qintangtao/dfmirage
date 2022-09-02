@@ -398,7 +398,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             if (++index>= 600)
             {
                 DWORD Stop=GetTickCount();
-                printf("[channel %d] Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \r\n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
+                printf("[channel %d] Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
                 index = 0;
             }
         }

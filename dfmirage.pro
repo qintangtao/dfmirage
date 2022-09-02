@@ -48,8 +48,9 @@ HEADERS += \
     Point.h \
     Rect.h
 
-win32: LIBS += -llibws2_32
-win32: LIBS += -L$$PWD/Decoder/lib/ -llibx264 \
+win32: LIBS += -lgdi32 -llibws2_32
+
+LIBS += -L$$PWD/Decoder/lib/ -llibx264 \
                -L$$PWD/IPCamera/lib/ -llibEasyIPCamera
 
 #LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavdevice -lavfilter -lavformat  -lavutil -lpostproc -lswresample -lswscale
