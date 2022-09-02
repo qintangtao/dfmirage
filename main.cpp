@@ -30,22 +30,6 @@ extern "C"
     #include "libavutil/common.h"
     #include "libavutil/avstring.h"
     #include "libavutil/imgutils.h"
-    #include "libavutil/time.h"
-    #include "libavutil/frame.h"
-    #include "libswresample/swresample.h"
-    #include "libavfilter/avfilter.h"
-    #include "libavutil/avassert.h"
-    #include "libavutil/avstring.h"
-    #include "libavutil/avutil.h"
-    #include "libavutil/channel_layout.h"
-    #include "libavutil/intreadwrite.h"
-    #include "libavutil/fifo.h"
-    #include "libavutil/mathematics.h"
-    #include "libavutil/opt.h"
-    #include "libavutil/parseutils.h"
-    #include "libavutil/pixdesc.h"
-    #include "libavutil/pixfmt.h"
-    #include "libavutil/hwcontext.h"
 }
 
 //#define ENABLED_FFMPEG_ENCODER
@@ -223,6 +207,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
     MirrorDriverClient *pClient = (MirrorDriverClient*)pChannelInfo->anyHandle;
     int nChannelId = pChannelInfo->id;
+    int fps = pChannelInfo->fps;
 
     uint8_t *src_data[4];
     int src_linesize[4];
@@ -230,7 +215,12 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     uint8_t *dst_data[4];
     int dst_linesize[4];
 
-    SwsContext *sws_ctx;
+    const AVCodec *codec;
+    AVCodecContext *c= NULL;
+    AVPacket *pkt = NULL;
+    AVFrame * frame = NULL;
+
+    SwsContext *sws_ctx = NULL;
 
     enum AVPixelFormat srcFormat = AV_PIX_FMT_RGB32;
     enum AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P;
@@ -241,7 +231,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     int ret;
     int index = 0;
     int yuvSize = width*height*1.5;
-    int dealy = 1000000 / pChannelInfo->fps / 3;
+    int dealy = 1000000 / fps / 3;
 
     int datasize;
     bool keyframe;
@@ -251,52 +241,192 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     DWORD Start;
     DWORD Stop;
 
-    av_image_alloc(src_data, src_linesize, width, height, srcFormat, 1);
-    av_image_alloc(dst_data, dst_linesize, width, height, dstFormat, 1);
 
-    sws_ctx = sws_getContext(width,height,srcFormat, width,height,dstFormat,SWS_BICUBIC,NULL,NULL,NULL);
-
-    src_data[0] = (uint8_t *)pClient->getBuffer();
-
-    while (pChannelInfo&&pChannelInfo->bThreadLiving)
+    do
     {
-#ifdef ENABLED_FFMPEG_ENCODER
-#else
-        QThread::usleep(dealy);
-#endif
-        if (pChannelInfo->pushStream == 0) {
-            QThread::usleep(dealy);
-            continue;
-        }
-
-        if (index == 0)
-            Start=GetTickCount();
-
-        sws_scale(sws_ctx,src_data,src_linesize,0,height, dst_data, dst_linesize);
-
-        datasize=0;
-        keyframe=false;
-
-        encode_data = pChannelInfo->encoder->Encoder((unsigned char *)dst_data[0], yuvSize, datasize, keyframe);
-
-        if ((NULL != encode_data) && (datasize > 0)) {
-            EASY_AV_Frame	frame;
-            frame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
-            frame.pBuffer = (Easy_U8*)encode_data+4;
-            frame.u32AVFrameLen =  datasize-4;
-            frame.u32VFrameType   = ( keyframe ? EASY_SDK_VIDEO_FRAME_I : EASY_SDK_VIDEO_FRAME_P);
-            frame.u32TimestampSec = 0;
-            frame.u32TimestampUsec = 0;
-            EasyIPCamera_PushFrame(nChannelId,  &frame);
-        }
-
-        if (++index>= 600)
+        ret = av_image_alloc(src_data, src_linesize, width, height, srcFormat, 1);
+        if (ret < 0)
         {
-            DWORD Stop=GetTickCount();
-            printf("ChannelId:%d, Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \r\n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
-            index = 0;
+            fprintf(stderr, "[channel %d] Could not allocate buffers..\n", nChannelId);
+            break;
         }
-    }
+        ret = av_image_alloc(dst_data, dst_linesize, width, height, dstFormat, 1);
+        if (ret < 0)
+        {
+            fprintf(stderr, "[channel %d] Could not allocate buffers..\n", nChannelId);
+            break;
+        }
+
+        sws_ctx = sws_getContext(width,height,srcFormat, width,height,dstFormat,SWS_BICUBIC,NULL,NULL,NULL);
+        if (sws_ctx == NULL) {
+            fprintf(stderr, "[channel %d] Could not sws_getContext.\n", nChannelId);
+            break;
+        }
+
+        src_data[0] = (uint8_t *)pClient->getBuffer();
+
+#ifdef ENABLED_FFMPEG_ENCODER
+        // codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        codec = avcodec_find_encoder_by_name("libx264");
+        //codec = avcodec_find_encoder_by_name("h264_qsv");
+        //codec = avcodec_find_encoder_by_name("h264_d3d11va");
+        if (NULL == codec)
+        {
+            fprintf(stderr, "[channel %d] Could not avcodec_find_encoder.\n", nChannelId);
+            break;
+        }
+
+        c = avcodec_alloc_context3(codec);
+
+        /* put sample parameters */
+        //c->bit_rate = 400000;
+        /* resolution must be a multiple of two */
+        c->frame_number=1;
+        c->width = width;
+        c->height = height;
+        /* frames per second */
+        c->time_base = (AVRational){1, fps};
+        c->framerate = (AVRational){fps, 1};
+        c->max_b_frames = 1;
+        c->pix_fmt = dstFormat;
+        c->thread_count = 1;
+
+        if (avcodec_open2(c, codec, NULL) < 0) {
+            fprintf(stderr, "[channel %d] Could not open codec.\n", nChannelId);
+            break;
+        }
+
+        // 用来存放编码后的数据（h264)
+        pkt = av_packet_alloc();
+        if (!pkt) {
+            fprintf(stderr, "[channel %d] Could not allocate packet.\n", nChannelId);
+            break;
+        }
+
+        // 用来存放编码前的数据（yuv）
+        frame = av_frame_alloc();
+        if (!frame) {
+            fprintf(stderr, "[channel %d] Could not allocate frame.\n", nChannelId);
+            break;
+        }
+
+        // 保证 frame 里就是一帧 yuv 数据
+        frame->width = c->width;
+        frame->height = c->height;
+        frame->format = c->pix_fmt;
+        frame->pts = 0;
+
+        // 创建输入缓冲区 方法一
+        ret = av_image_alloc(frame->data, frame->linesize, width, height, c->pix_fmt, 1);
+        if (ret < 0) {
+            fprintf(stderr, "[channel %d] Could not allocate buffers.\n", nChannelId);
+            break;
+        }
+
+        /*
+        // 利用width、height、format创建frame的数据缓冲区，利用width、height、format可以算出一帧大小
+        ret = av_frame_get_buffer(frame, 1);
+        if (ret < 0) {
+            break;
+        }
+        */
+
+        /*
+        // 创建输入缓冲区 方法二
+        buf = (uint8_t *)av_malloc(image_size);
+        ret = av_image_fill_arrays(frame->data, frame->linesize, buf, in.pixFmt, in.width, in.height, 1);
+        if (ret < 0) {
+            break;
+        }
+        */
+#endif
+
+        while (pChannelInfo&&pChannelInfo->bThreadLiving)
+        {
+    #ifdef ENABLED_FFMPEG_ENCODER
+    #else
+            QThread::usleep(dealy);
+    #endif
+            if (pChannelInfo->pushStream == 0) {
+                QThread::usleep(dealy);
+                continue;
+            }
+
+            if (index == 0)
+                Start=GetTickCount();
+
+
+#ifdef ENABLED_FFMPEG_ENCODER
+
+            sws_scale(sws_ctx,src_data,src_linesize,0,height, frame->data,frame->linesize);
+
+            ret = avcodec_send_frame(c, frame);
+            if (ret < 0) {
+                fprintf(stderr, "[channel %d] Could not send frame.\n", nChannelId);
+                continue;
+            }
+
+            while (true) {
+                // 从编码器中获取编码后的数据
+                ret = avcodec_receive_packet(c, pkt);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    //fprintf(stderr, "[channel %d] Could not receive packet (%d).\n", nChannelId, ret);
+                    break;
+                } else if (ret < 0) {
+                    fprintf(stderr, "[channel %d] Could not receive packet.\n", nChannelId);
+                    break;
+                }
+
+                EASY_AV_Frame	frame;
+                frame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
+                frame.pBuffer = (Easy_U8*)pkt->data+4;
+                frame.u32AVFrameLen =  pkt->size-4;
+                frame.u32VFrameType   =  ( pkt->flags && AV_PKT_FLAG_KEY ? EASY_SDK_VIDEO_FRAME_I : EASY_SDK_VIDEO_FRAME_P);
+                frame.u32TimestampSec = 0;
+                frame.u32TimestampUsec = 0;
+                EasyIPCamera_PushFrame(nChannelId,  &frame);
+
+                av_packet_unref(pkt);
+            }
+
+            frame->pts++;
+
+#else
+
+            sws_scale(sws_ctx,src_data,src_linesize,0,height, dst_data, dst_linesize);
+
+            datasize=0;
+            keyframe=false;
+
+            encode_data = pChannelInfo->encoder->Encoder((unsigned char *)dst_data[0], yuvSize, datasize, keyframe);
+
+            if ((NULL != encode_data) && (datasize > 0)) {
+                EASY_AV_Frame	frame;
+                frame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
+                frame.pBuffer = (Easy_U8*)encode_data+4;
+                frame.u32AVFrameLen =  datasize-4;
+                frame.u32VFrameType   = ( keyframe ? EASY_SDK_VIDEO_FRAME_I : EASY_SDK_VIDEO_FRAME_P);
+                frame.u32TimestampSec = 0;
+                frame.u32TimestampUsec = 0;
+                EasyIPCamera_PushFrame(nChannelId,  &frame);
+            }
+#endif
+
+            if (++index>= 600)
+            {
+                DWORD Stop=GetTickCount();
+                printf("[channel %d] Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \r\n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
+                index = 0;
+            }
+        }
+
+    } while(false);
+
+#ifdef ENABLED_FFMPEG_ENCODER
+    avcodec_free_context(&c);
+    av_packet_free(&pkt);
+    av_frame_free(&frame);
+#endif
 
     av_freep(&src_data[0]);
     av_freep(&dst_data[0]);
@@ -435,235 +565,3 @@ int main(int argc, char *argv[])
     delete[] liveChannels;
     return 0;
 }
-
-
-#if 0
-
-static void encode(MirrorDriverClient *client)
-{
-#if 0
-    DWORD Start=GetTickCount();
-    int idx = 0;
-    while(idx++ < 60)
-    {
-        QImage image((uchar *)m_screenBuffer, width, height, QImage::Format_RGB32);
-        image.save(QString("aaa_%1.png").arg(idx++));
-    }
-    DWORD Stop=GetTickCount();
-    printf("Start:%d, Stop:%d, Diff:%d\r\n", Start, Stop, (Stop-Start)/1000);
-
-#else
-
-    uint8_t *YUV_BUF_420[4];
-    int linesizes[4];
-
-    uint8_t *RGB32_BUF[4];
-    int rgbLinesize[4];
-
-    enum AVPixelFormat srcFormat = AV_PIX_FMT_RGB32;
-    enum AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P;
-    //enum AVPixelFormat dstFormat = AV_PIX_FMT_NV12;
-
-    av_image_alloc(RGB32_BUF,rgbLinesize,width,height,srcFormat,1);
-    av_image_alloc(YUV_BUF_420,linesizes,width,height,dstFormat,1);
-
-
-    SwsContext *m_pImageConvertCtx = sws_getContext(width,height,srcFormat, width,height,dstFormat,SWS_BICUBIC,NULL,NULL,NULL);
-
-    unsigned char *yuvBuf = (uint8_t *)malloc(width*height*1.5);
-    int yuvSize = width*height*1.5;
-    int ySize = width*height;
-    int uSize = ySize/4;
-
-    EASY_AV_Frame	easyFrame;
-    memset(&easyFrame, 0x00, sizeof(EASY_AV_Frame));
-    easyFrame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
-
-#ifdef ENABLED_FFMPEG_ENCODER
-     // AVCodec *pCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
-    const AVCodec *pCodec = avcodec_find_encoder_by_name("libx264");
-    //const AVCodec *pCodec = avcodec_find_encoder_by_name("h264_qsv");
-     //AVCodec *pCodec = avcodec_find_encoder_by_name("h264_d3d11va");
-    if (NULL == pCodec)
-        return;
-
-    AVCodecContext *pCodecCtx = avcodec_alloc_context3(pCodec);
-
-#if 1
-    /* put sample parameters */
-        //pCodecCtx->bit_rate = 400000;
-        /* resolution must be a multiple of two */
-        pCodecCtx->frame_number=1;
-        pCodecCtx->width = width;
-        pCodecCtx->height = height;
-        /* frames per second */
-        pCodecCtx->time_base = (AVRational){1, fps};
-        pCodecCtx->framerate = (AVRational){fps, 1};
-
-        /* emit one intra frame every ten frames
-         * check frame pict_type before passing frame
-         * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
-         * then gop_size is ignored and the output of encoder
-         * will always be I frame irrespective to gop_size
-         */
-        //pCodecCtx->gop_size = 10;
-        pCodecCtx->max_b_frames = 1;
-        pCodecCtx->pix_fmt = pix_fmt;
-        pCodecCtx->thread_count = 1;
-#else
-    pCodecCtx->bit_rate =3000000;   //初始化为0
-    pCodecCtx->frame_number=1;  //每包一个视频帧
-    pCodecCtx->width = width;
-    pCodecCtx->height = height;
-    pCodecCtx->codec_type = AVMEDIA_TYPE_VIDEO;
-    pCodecCtx->pix_fmt = pix_fmt;
-    pCodecCtx->time_base = {1, fps};
-    //pCodecCtx->max_b_frames=1;
-    pCodecCtx->thread_count = 1;
-#endif
-
-    if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
-        qDebug() << "Could not open codec.\n";
-        return;
-    }
-
-    qDebug() << "Success open codec.\n";
-
-    // 用来存放编码后的数据（h264)
-    AVPacket *pkt = av_packet_alloc();
-    if (!pkt) {
-        qDebug() << "could not allocate audio packet";
-        return;
-    }
-
-    // 用来存放编码前的数据（yuv）
-    AVFrame * frame = av_frame_alloc();
-    if (!frame) {
-        qDebug() << "could not allocate audio frame";
-        return;
-    }
-
-    // 保证 frame 里就是一帧 yuv 数据
-    frame->width = pCodecCtx->width;
-    frame->height = pCodecCtx->height;
-    frame->format = pCodecCtx->pix_fmt;
-    frame->pts = 0;
-
-    // 创建输入缓冲区 方法一
-    int ret = av_image_alloc(frame->data, frame->linesize, width, height, pCodecCtx->pix_fmt, 1);
-    if (ret < 0) {
-        qDebug() << "could not allocate audio data buffers: ";
-        return;
-    }
-
-    /*
-    // 利用width、height、format创建frame的数据缓冲区，利用width、height、format可以算出一帧大小
-    ret = av_frame_get_buffer(frame, 1);
-    if (ret < 0) {
-    ERRBUF(ret);
-    qDebug() << "could not allocate audio data buffers: " << errbuf;
-    goto end;
-    }
-    */
-
-    /*
-    // 创建输入缓冲区 方法二
-    buf = (uint8_t *)av_malloc(image_size);
-    ret = av_image_fill_arrays(frame->data, frame->linesize, buf, in.pixFmt, in.width, in.height, 1);
-    if (ret < 0) {
-    ERRBUF(ret);
-    qDebug() << "could not allocate audio data buffers: " << errbuf;
-    goto end;
-    }
-    */
-#endif
-
-    qDebug() << "Success.\n";
-
-    static int g_index = 0;
-
-    int nWidhtHeightBuf = (width*height*3)>>1;
-    uchar *pDataBuffer = new uchar[nWidhtHeightBuf];
-    DWORD Start=GetTickCount();
-    int dealy = 1000000 / fps / 3;
-    while (true)
-    {
-#ifdef ENABLED_FFMPEG_ENCODER
-#else
-        QThread::usleep(dealy);
-#endif
-        if (!m_isSendFrame) {
-            QThread::usleep(dealy);
-            continue;
-        }
-
-        if (g_index == 0)
-            Start=GetTickCount();
-
-        RGB32_BUF[0] = (uint8_t *)client->getBuffer();//
-
-#ifdef ENABLED_FFMPEG_ENCODER
-        sws_scale(m_pImageConvertCtx,RGB32_BUF,rgbLinesize,0,height, frame->data,frame->linesize);
-
-        int ret = avcodec_send_frame(pCodecCtx, frame);
-        if (ret < 0) {
-            qDebug() << "error sending the frame to the codec: ";
-            continue;
-        }
-
-        while (true) {
-            // 从编码器中获取编码后的数据
-            ret = avcodec_receive_packet(pCodecCtx, pkt);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                qDebug() << "AVERROR_EOF " << ret << AVERROR_EOF << AVERROR(EAGAIN);
-                break;
-            } else if (ret < 0) {
-                qDebug() << "error encode audio frame: ";
-                break;
-            }
-            //outFile.write((const char *)pkt->data, pkt->size);
-
-            {
-                easyFrame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
-                easyFrame.pBuffer = (Easy_U8*)pkt->data+4;
-                easyFrame.u32AVFrameLen =  pkt->size-4;
-                easyFrame.u32VFrameType   = ( pkt->flags && AV_PKT_FLAG_KEY ? EASY_SDK_VIDEO_FRAME_I : EASY_SDK_VIDEO_FRAME_P);
-                EasyIPCamera_PushFrame(0,  &easyFrame);
-            }
-
-            av_packet_unref(pkt);
-        }
-
-        frame->pts++;
-#else
-        sws_scale(m_pImageConvertCtx,RGB32_BUF,rgbLinesize,0,height, YUV_BUF_420, linesizes);
-
-        int datasize=0;
-        bool keyframe=false;
-        uchar *pH264Data = m_pEncoder->Encoder((unsigned char *)YUV_BUF_420[0], yuvSize, datasize, keyframe);
-
-        if ((NULL != pH264Data) && (datasize > 0)) {
-            easyFrame.pBuffer = (Easy_U8*)pH264Data+4;
-            easyFrame.u32AVFrameLen =  datasize-4;
-            easyFrame.u32VFrameType   = ( keyframe ? EASY_SDK_VIDEO_FRAME_I : EASY_SDK_VIDEO_FRAME_P);
-            EasyIPCamera_PushFrame(0,  &easyFrame);
-        }
-#endif
-
-        if (++g_index>= 600)
-        {
-            DWORD Stop=GetTickCount();
-            printf("Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \r\n", Start, Stop, (Stop-Start)/1000,g_index, (g_index/((Stop-Start)/1000)));
-            g_index = 0;
-        }
-    }
-
-    // free i420 data buffer
-    delete pDataBuffer;
-    pDataBuffer = NULL;
-
-#endif
-
-}
-
-#endif

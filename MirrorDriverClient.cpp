@@ -4,6 +4,7 @@
 #include <QLoggingCategory>
 Q_LOGGING_CATEGORY(logMirrorDriverClient, "log.desktop.MirrorDriverClient")
 
+
 const TCHAR MirrorDriverClient::MINIPORT_REGISTRY_PATH[] =
   _T("SYSTEM\\CurrentControlSet\\Hardware Profiles\\")
   _T("Current\\System\\CurrentControlSet\\Services");
@@ -35,9 +36,6 @@ MirrorDriverClient::MirrorDriverClient() :
 MirrorDriverClient::~MirrorDriverClient()
 {
     try {
-        //terminate();
-        //wait();
-
         dispose();
       } catch (Exception &e) {
         qCCritical(logMirrorDriverClient()) << "An error occured during the mirror driver deinitialization: "
