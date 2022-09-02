@@ -199,10 +199,12 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     uint8_t *dst_data[4];
     int dst_linesize[4];
 
+#ifdef ENABLED_FFMPEG_ENCODER
     const AVCodec *codec;
     AVCodecContext *c= NULL;
     AVPacket *pkt = NULL;
     AVFrame * frame = NULL;
+#endif
 
     SwsContext *sws_ctx = NULL;
 
@@ -224,7 +226,6 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
     DWORD Start;
     DWORD Stop;
-
 
     do
     {
@@ -397,8 +398,8 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
             if (++index>= 600)
             {
-                DWORD Stop=GetTickCount();
-                printf("[channel %d] Start:%d, Stop:%d, Diff:%d, Count:%d, FPS:%d, \n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
+                Stop=GetTickCount();
+                printf("[channel %d] Start:%ld, Stop:%ld, Diff:%ld, Count:%d, FPS:%ld, \n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
                 index = 0;
             }
         }
@@ -424,9 +425,8 @@ int main(int argc, char *argv[])
     int OutputCount = 1;
     char* ConfigName=	"channel";
 
-    int isActivated = 0 ;
     char szIP[16] = {0};
-    int ch;
+    int nServerPort = 554;
 
     uint8_t  sps[100];
     uint8_t  pps[100];
@@ -469,7 +469,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    int nServerPort = GetAvaliblePort(554);
+    nServerPort = GetAvaliblePort(nServerPort);
 
     //int left = GetSystemMetrics(SM_XVIRTUALSCREEN);
     //int top = GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -479,7 +479,6 @@ int main(int argc, char *argv[])
     SOURCE_CHANNEL_T*	channels = new SOURCE_CHANNEL_T[OutputCount];
     memset(&channels[0], 0x00, sizeof(SOURCE_CHANNEL_T) * OutputCount);
     char rtsp_url[128];
-    char sFileName[256] = {0,};
     for (int i=0; i<OutputCount; i++)
     {
         channels[i].id = i;

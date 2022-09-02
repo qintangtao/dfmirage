@@ -1,6 +1,6 @@
 #include "MirrorDriverClient.h"
 #include "Exception.h"
-
+#include <stdio.h>
 const TCHAR MirrorDriverClient::MINIPORT_REGISTRY_PATH[] =
   _T("SYSTEM\\CurrentControlSet\\Hardware Profiles\\")
   _T("Current\\System\\CurrentControlSet\\Services");
@@ -24,7 +24,7 @@ MirrorDriverClient::MirrorDriverClient() :
         load();
         connect();
       } catch (Exception &e) {
-        _ftprintf(stderr, _T("An error occured during the mirror driver initialization: %s\n"), e.getMessage());
+        _ftprintf(stderr, _T("An error occured during the mirror driver initialization: %ls\n"), e.getMessage());
       }
 }
 
@@ -33,7 +33,7 @@ MirrorDriverClient::~MirrorDriverClient()
     try {
         dispose();
       } catch (Exception &e) {
-        _ftprintf(stderr, _T("An error occured during the mirror driver deinitialization: %s\n"), e.getMessage());
+        _ftprintf(stderr, _T("An error occured during the mirror driver deinitialization: %ls\n"), e.getMessage());
       }
 }
 
@@ -121,7 +121,7 @@ void MirrorDriverClient::unload()
       commitDisplayChanges(pdm);
       _ftprintf(stdout, _T("Mirror driver is unloaded\n"));
     } catch (Exception &e) {
-          _ftprintf(stderr, _T("Failed to unload the mirror driver:  %s\n"), e.getMessage());
+          _ftprintf(stderr, _T("Failed to unload the mirror driver:  %ls\n"), e.getMessage());
     }
   }
 
@@ -187,23 +187,23 @@ void MirrorDriverClient::extractDeviceInfo(TCHAR *driverName)
   memset(&m_deviceInfo, 0, sizeof(m_deviceInfo));
   m_deviceInfo.cb = sizeof(m_deviceInfo);
 
-  _ftprintf(stdout, _T("Searching for: %s\n"), driverName);
+  _ftprintf(stdout, _T("Searching for: %ls\n"), driverName);
 
   m_deviceNumber = 0;
   BOOL result;
   while (result = EnumDisplayDevices(0, m_deviceNumber, &m_deviceInfo, 0)) {
-      _ftprintf(stdout, _T("DeviceString:%s, DeviceName:%s, DeviceKey:%s\n"),
+      _ftprintf(stdout, _T("DeviceString:%30ls, DeviceName:%15ls, DeviceKey:%ls\n"),
                 m_deviceInfo.DeviceString, m_deviceInfo.DeviceName, m_deviceInfo.DeviceKey);
     StringStorage deviceString(m_deviceInfo.DeviceString);
     if (deviceString.isEqualTo(driverName)) {
-        _ftprintf(stdout, _T("%s is found\n"), driverName);
+        _ftprintf(stdout, _T("%ls is found\n"), driverName);
         break;
     }
     m_deviceNumber++;
   }
   if (!result) {
     StringStorage errMess;
-    errMess.format(_T("Can't find %s!"), driverName);
+    errMess.format(_T("Can't find %ls!"), driverName);
     throw Exception(errMess.getString());
   }
 }
@@ -221,7 +221,7 @@ void MirrorDriverClient::openDeviceRegKey(TCHAR *miniportName)
     }
   }
 
-  _ftprintf(stdout, _T("Opening registry key %s\\%s\\%s\n"),
+  _ftprintf(stdout, _T("Opening registry key %ls\\%ls\\%ls\n"),
                MINIPORT_REGISTRY_PATH,
                miniportName,
                subKey.getString());
@@ -281,7 +281,7 @@ void MirrorDriverClient::commitDisplayChanges(DEVMODE *pdm)
   // ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, NULL,
   //                         CDS_UPDATEREGISTRY, NULL)
   // And the 2000 does not work with DEVMODE that has the set DM_POSITION bit.
-  _ftprintf(stdout, _T("commitDisplayChanges(1): %s\n"), m_deviceInfo.DeviceName);
+  _ftprintf(stdout, _T("commitDisplayChanges(1): %ls\n"), m_deviceInfo.DeviceName);
 
   if (pdm) {
     LONG code = ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, 0, CDS_UPDATEREGISTRY, 0);
@@ -291,7 +291,7 @@ void MirrorDriverClient::commitDisplayChanges(DEVMODE *pdm)
                      (int)code);
       throw Exception(errMess.getString());
     }
-    _ftprintf(stdout, _T("commitDisplayChanges(2): %s\n"), m_deviceInfo.DeviceName);
+    _ftprintf(stdout, _T("commitDisplayChanges(2): %ls\n"), m_deviceInfo.DeviceName);
 
     code = ChangeDisplaySettingsEx(m_deviceInfo.DeviceName, pdm, 0, 0, 0);
     if (code < 0) {
