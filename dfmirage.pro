@@ -1,4 +1,4 @@
-QT += gui
+QT -= gui
 
 CONFIG += c++11 console
 CONFIG -= app_bundle
@@ -14,6 +14,8 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
+
+DEFINES += ENABLED_FFMPEG_ENCODER
 
 CONFIG(debug, debug|release) {
 
@@ -33,7 +35,6 @@ SOURCES += main.cpp \
     StringStorage.cpp \
     PixelFormat.cpp
 
-win32: LIBS += -lgdi32 -llibws2_32
 
 HEADERS += \
     RegistryKey.h \
@@ -47,10 +48,12 @@ HEADERS += \
     Point.h \
     Rect.h
 
+win32: LIBS += -llibws2_32
 win32: LIBS += -L$$PWD/Decoder/lib/ -llibx264 \
                -L$$PWD/IPCamera/lib/ -llibEasyIPCamera
 
-LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavdevice -lavfilter -lavformat  -lavutil -lpostproc -lswresample -lswscale
+#LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavdevice -lavfilter -lavformat  -lavutil -lpostproc -lswresample -lswscale
+LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavutil -lswscale
 
 INCLUDEPATH += $$PWD/Decoder/include \
                $$PWD/IPCamera/include \

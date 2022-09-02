@@ -1,43 +1,27 @@
-#include <QCoreApplication>
-#include <QDebug>
-#include <QImage>
-#include <QThread>
+
 #include <windows.h>
-#include <winuser.h>
-#include <string.h>
+#include <process.h>
 #include <stdio.h>
 #include <tchar.h>
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string>
-#include <vector>
-#include <stdio.h>
-#include <mmsystem.h>
 #include "Decoder/H264Encoder.h"
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"
 
 extern "C"
 {
-    #include "libavcodec/codec.h"
     #include "libavcodec/avcodec.h"
-    #include "libavcodec/avfft.h"
-    #include "libavdevice/avdevice.h"
     #include "libswscale/swscale.h"
-    #include "libavformat/avformat.h"
-    #include "libavformat/avio.h"
-    #include "libavutil/common.h"
-    #include "libavutil/avstring.h"
     #include "libavutil/imgutils.h"
 }
 
-//#define ENABLED_FFMPEG_ENCODER
-
-using namespace std;
-
 //exe名称固定（EasyIPCamera_RTSP） KEY_EASYIPCAMERA和名称绑定了
 #define KEY_EASYIPCAMERA "6D72754B7A4969576B5A75413362465A706B3337634F704659584E35535642445957316C636D4666556C52545543356C654756584446616732504467523246326157346D516D466962334E68514449774D545A4659584E355247467964326C75564756686257566863336B3D"
+
+#ifdef _WIN32
+    #define Sleep(x) ::Sleep((x / 1000) + 1)
+#else
+    #define Sleep(x) usleep(x)
+#endif
 
 typedef struct tagSOURCE_CHANNEL_T
 {
@@ -159,9 +143,9 @@ static void __FFmpegLog_Callback(void* ptr, int level, const char* fmt, va_list 
     va_end(vl2);
     line[1023] = '\0';
     if (level > AV_LOG_WARNING) {
-        qDebug("%s", line);
+        fprintf(stdout, "%s", line);
     } else{
-        qWarning("%s", line);
+        fprintf(stderr, "%s", line);
     }
     free(line);
 }
@@ -236,7 +220,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     int datasize;
     bool keyframe;
 
-    uchar *encode_data;
+    uint8_t *encode_data;
 
     DWORD Start;
     DWORD Stop;
@@ -345,16 +329,15 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         {
     #ifdef ENABLED_FFMPEG_ENCODER
     #else
-            QThread::usleep(dealy);
+            Sleep(dealy);
     #endif
             if (pChannelInfo->pushStream == 0) {
-                QThread::usleep(dealy);
+                Sleep(dealy);
                 continue;
             }
 
             if (index == 0)
                 Start=GetTickCount();
-
 
 #ifdef ENABLED_FFMPEG_ENCODER
 
@@ -435,7 +418,6 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     return 0;
 }
 
-
 int main(int argc, char *argv[])
 {
     int fps = 60;
@@ -446,8 +428,8 @@ int main(int argc, char *argv[])
     char szIP[16] = {0};
     int ch;
 
-    uchar  sps[100];
-    uchar  pps[100];
+    uint8_t  sps[100];
+    uint8_t  pps[100];
     long spslen;
     long ppslen;
 
@@ -546,9 +528,6 @@ int main(int argc, char *argv[])
    EasyIPCamera_Startup(nServerPort, AUTHENTICATION_TYPE_BASIC,"", (unsigned char*)"", (unsigned char*)"", __EasyIPCamera_Callback, (void *)&channels[0], &liveChannels[0], OutputCount);
 
     printf("Press Enter exit...\n");
-    getchar();
-    getchar();
-    getchar();
     getchar();
     getchar();
     getchar();
