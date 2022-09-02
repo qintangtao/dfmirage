@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-x86-all
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-x86-all/lib
+includedir=/f/ff/usr/ffmpeg-x86-all/include
+
+Name: libavfilter
+Description: FFmpeg audio/video filtering library
+Version: 8.24.100
+Requires: 
+Requires.private: libswscale >= 6.4.100, libpostproc >= 56.3.100, libavformat >= 59.16.100, libavcodec >= 59.18.100, libswresample >= 4.3.100, libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lavfilter 
+Libs.private: -lm -latomic -L/f/ff/usr/libmfx-x86/lib -lmfx -lstdc++ -lole32 -luuid
+Cflags: -I${includedir}

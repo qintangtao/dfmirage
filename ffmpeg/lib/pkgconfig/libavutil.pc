@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-x86-all
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-x86-all/lib
+includedir=/f/ff/usr/ffmpeg-x86-all/include
+
+Name: libavutil
+Description: FFmpeg utility library
+Version: 57.17.100
+Requires: 
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavutil 
+Libs.private: -lm -L/f/ff/usr/libmfx-x86/lib -lmfx -lstdc++ -lole32 -luuid -luser32 -lbcrypt -latomic
+Cflags: -I${includedir}

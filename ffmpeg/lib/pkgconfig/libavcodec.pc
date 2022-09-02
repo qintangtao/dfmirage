@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-x86-all
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-x86-all/lib
+includedir=/f/ff/usr/ffmpeg-x86-all/include
+
+Name: libavcodec
+Description: FFmpeg codec library
+Version: 59.18.100
+Requires: 
+Requires.private: libswresample >= 4.3.100, libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lavcodec 
+Libs.private: -liconv -lm -latomic -L/mingw32/lib -lz -L/f/ff/usr/libx264-x86/lib -lx264 -lmfplat -lmfuuid -lole32 -lstrmiids -lole32 -luser32 -L/f/ff/usr/libmfx-x86/lib -lmfx -lstdc++ -lole32 -luuid
+Cflags: -I${includedir}

@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-x86-all
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-x86-all/lib
+includedir=/f/ff/usr/ffmpeg-x86-all/include
+
+Name: libswresample
+Description: FFmpeg audio resampling library
+Version: 4.3.100
+Requires: 
+Requires.private: libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lswresample 
+Libs.private: -lm -latomic
+Cflags: -I${includedir}
