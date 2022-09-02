@@ -8,8 +8,7 @@ const TCHAR MirrorDriverClient::MINIPORT_REGISTRY_PATH[] =
   _T("SYSTEM\\CurrentControlSet\\Hardware Profiles\\")
   _T("Current\\System\\CurrentControlSet\\Services");
 
-MirrorDriverClient::MirrorDriverClient(QObject *parent)
-    : QObject(parent),
+MirrorDriverClient::MirrorDriverClient() :
     m_isDriverOpened(false),
     m_isDriverLoaded(false),
     m_isDriverAttached(false),

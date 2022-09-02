@@ -1,7 +1,6 @@
 #ifndef MIRRORDRIVERCLIENT_H
 #define MIRRORDRIVERCLIENT_H
 
-#include <QObject>
 #include <tchar.h>
 #include <windows.h>
 
@@ -11,11 +10,10 @@
 #include "Dimension.h"
 #include "Point.h"
 
-class MirrorDriverClient : public QObject
+class MirrorDriverClient
 {
-    Q_OBJECT
 public:
-    explicit MirrorDriverClient(QObject *parent = nullptr);
+    explicit MirrorDriverClient();
     ~MirrorDriverClient();
 
     inline PixelFormat getPixelFormat() const
