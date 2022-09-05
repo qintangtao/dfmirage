@@ -6,6 +6,7 @@
 #include "Decoder/H264Encoder.h"
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"
+#include "StopWatch.h"
 
 extern "C"
 {
@@ -18,9 +19,9 @@ extern "C"
 #define KEY_EASYIPCAMERA "6D72754B7A4969576B5A75413362465A706B3337634F704659584E35535642445957316C636D4666556C52545543356C654756584446616732504467523246326157346D516D466962334E68514449774D545A4659584E355247467964326C75564756686257566863336B3D"
 
 #ifdef _WIN32
-    #define Sleep(x) ::Sleep((x / 1000) + 1)
+    #define USleep(x) ::Sleep((x / 1000) + 1)
 #else
-    #define Sleep(x) usleep(x)
+    #define USleep(x) usleep(x)
 #endif
 
 typedef struct tagSOURCE_CHANNEL_T
@@ -122,7 +123,7 @@ static int GetAvaliblePort(int nPort)
 #else
         inet_pton(AF_INET, "0.0.0.0", &addr.sin_addr);
 #endif
-        Sleep(1);
+        USleep(1000);
     }
 #ifdef _WIN32
     closesocket(fd);
@@ -217,15 +218,12 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     int ret;
     int index = 0;
     int yuvSize = width*height*1.5;
-    int dealy = 1000000 / fps / 3;
+    double dealy = 1000000.0f / fps; //us
 
     int datasize;
     bool keyframe;
 
     uint8_t *encode_data;
-
-    DWORD Start;
-    DWORD Stop;
 
     do
     {
@@ -326,19 +324,25 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         */
 #endif
 
+#define TEST_FPS
+        double dealyFault = 0;
+        StopWatch watch;
+#ifdef TEST_FPS
+        StopWatch watchFPS;
+#endif
         while (pChannelInfo&&pChannelInfo->bThreadLiving)
         {
-    #ifdef ENABLED_FFMPEG_ENCODER
-    #else
-            Sleep(dealy);
-    #endif
             if (pChannelInfo->pushStream == 0) {
-                Sleep(dealy);
+                USleep(dealy);
                 continue;
             }
 
+#ifdef TEST_FPS
             if (index == 0)
-                Start=GetTickCount();
+                watchFPS.Start();
+#endif
+
+            watch.Start();
 
 #ifdef ENABLED_FFMPEG_ENCODER
 
@@ -396,12 +400,38 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             }
 #endif
 
-            if (++index>= 600)
+            watch.End();
+
+            if (dealy > watch.costTime)
             {
-                Stop=GetTickCount();
-                printf("[channel %d] Start:%ld, Stop:%ld, Diff:%ld, Count:%d, FPS:%ld, \n", nChannelId, Start, Stop, (Stop-Start)/1000,index, (index/((Stop-Start)/1000)));
+                double dealyDiff = dealy - watch.costTime;
+                if (dealyFault < dealyDiff) {
+                    dealyDiff -= dealyFault;
+                    dealyFault = 0;
+                    //printf("[channel %d] Index:%d, Diff:%ld, costTime:%f\n", nChannelId, index, dealyDiff, watch.costTime);
+                    StopWatch::SleepPerformUS(dealyDiff);
+                } else {
+                    dealyFault -= dealyDiff;
+                    dealyDiff = 0;
+                }
+            }
+            else
+            {
+                dealyFault += (watch.costTime - dealy);
+                //printf("[channel %d] ===== Index:%d, costTime:%f, dealy:%f, dealyFault:%f\n", nChannelId, index, watch.costTime, dealy, dealyFault);
+            }
+
+            index++;
+
+#ifdef TEST_FPS
+            if (index>= 600)
+            {
+                watchFPS.End();
+                double fps = (index*1000000.0f)/watchFPS.costTime;
+                printf("[channel %d] Count:%d, dealyFault:%f,  usTime:%f, FPS:%f, \n", nChannelId, index, dealyFault, watchFPS.costTime,  fps);
                 index = 0;
             }
+#endif
         }
 
     } while(false);

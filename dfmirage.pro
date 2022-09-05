@@ -16,6 +16,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 #DEFINES += ENABLED_FFMPEG_ENCODER
+#DEFINES += TEST_FPS
 
 CONFIG(debug, debug|release) {
 
@@ -46,7 +47,8 @@ HEADERS += \
     PixelFormat.h \
     Dimension.h \
     Point.h \
-    Rect.h
+    Rect.h \
+    StopWatch.h
 
 win32: LIBS += -lgdi32 -llibws2_32
 
