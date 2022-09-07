@@ -236,6 +236,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             fprintf(stderr, "[channel %d] Could not allocate buffers..\n", nChannelId);
             break;
         }
+
         ret = av_image_alloc(dst_data, dst_linesize, width, height, dstFormat, 1);
         if (ret < 0)
         {
@@ -333,6 +334,9 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 #ifdef TEST_FPS
         StopWatch watchFPS;
 #endif
+
+        printf("[channel %d] Enter\n", nChannelId);
+
         while (pChannelInfo&&pChannelInfo->bThreadLiving)
         {
             if (pChannelInfo->pushStream == 0) {
@@ -445,9 +449,12 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     av_frame_free(&frame);
 #endif
 
-    av_freep(&src_data[0]);
-    av_freep(&dst_data[0]);
+    // 崩溃，暂时注释掉
+    //av_freep(&src_data[0]);
+    //av_freep(&dst_data[0]);
     sws_freeContext(sws_ctx);
+
+    printf("[channel %d] Exit\n", nChannelId);
 
     return 0;
 }
@@ -568,11 +575,12 @@ int main(int argc, char *argv[])
     {
         channels[nI].bThreadLiving = false;
     }
-    Sleep(200);
+    ::Sleep(3000);
 
     EasyIPCamera_Shutdown();
 
     delete[] channels;
     delete[] liveChannels;
+
     return 0;
 }
