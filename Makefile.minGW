@@ -22,7 +22,7 @@ LINK_OPTS 	= -L../dfmirage/Decoder/lib -L../dfmirage/IPCamera/lib -L../dfmirage/
 LINK_LIBS 	= -lgdi32 -lws2_32 -llibx264 -llibEasyIPCamera -lavcodec -lavutil -lswscale
 CC 			= g++
 CFLAGS 		= -c -fno-keep-inline-dllexport -O2 -std=gnu++11 -Wall -W -Wextra -fexceptions -mthreads $(DEFINES) $(INCLUDES)
-EXE_NAME 	= EasyIPCamera_RTSP
+EXE_NAME 	= EasyScreenCapture
 
 # 使用ffmpeg编码
 #-DENABLED_FFMPEG_ENCODER
