@@ -254,9 +254,9 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
 #ifdef ENABLED_FFMPEG_ENCODER
         // codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-        codec = avcodec_find_encoder_by_name("libx264");
+        //codec = avcodec_find_encoder_by_name("libx264");
         //codec = avcodec_find_encoder_by_name("h264_qsv");
-        //codec = avcodec_find_encoder_by_name("h264_d3d11va");
+        codec = avcodec_find_encoder_by_name("h264_nvenc");
         if (NULL == codec)
         {
             fprintf(stderr, "[channel %d] Could not avcodec_find_encoder.\n", nChannelId);
@@ -475,8 +475,11 @@ int main(int argc, char *argv[])
 
     enum AVHWDeviceType type;
 
+#ifdef ENABLED_FFMPEG_LOG
     av_log_set_level(AV_LOG_TRACE);
     av_log_set_callback(__FFmpegLog_Callback);
+#endif
+
     fprintf(stderr, "Available device types:");
     while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
         fprintf(stderr, " %s", av_hwdevice_get_type_name(type));

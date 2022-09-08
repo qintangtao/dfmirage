@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-nv-x64-5.0.1
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/lib
+includedir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/include
+
+Name: libswresample
+Description: FFmpeg audio resampling library
+Version: 4.3.100
+Requires: 
+Requires.private: libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lswresample 
+Libs.private: 
+Cflags: -I${includedir}

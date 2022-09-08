@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-nv-x64-5.0.1
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/lib
+includedir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/include
+
+Name: libavformat
+Description: FFmpeg container format library
+Version: 59.16.100
+Requires: 
+Requires.private: libavcodec >= 59.18.100, libswresample >= 4.3.100, libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lavformat 
+Libs.private: secur32.lib ws2_32.lib
+Cflags: -I${includedir}

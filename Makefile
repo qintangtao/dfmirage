@@ -15,17 +15,20 @@
 #	       $(CC) $^ $(CFLAGS)  -o $@
 # 百分号相当于一个通配符
 
-PREFIX 		= ../dfmirage/bin
-INCLUDES	= -I../dfmirage -I. -I../dfmirage/Decoder/include -I../dfmirage/IPCamera/include -I../dfmirage/ffmpeg/include -Imingw32/include
+PREFIX 		= ../dfmirage/bin64
+INCLUDES	= -I../dfmirage -I. -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
 DEFINES		= -DTEST_FPS -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
-LINK_OPTS 	= -L../dfmirage/Decoder/lib -L../dfmirage/IPCamera/lib -L../dfmirage/ffmpeg/lib -Lmingw32/i686-w64-mingw32/lib/
+# 启用ffmpeg编码
+DEFINES		+= -DENABLED_FFMPEG_ENCODER
+# 启用ffmpeg日志
+#DEFINES		+= -ENABLED_FFMPEG_LOG
+LINK_OPTS 	= -L../dfmirage/Decoder/libx264-x64/lib -L../dfmirage/IPCamera64/lib -L../dfmirage/ffmpeg64/lib -Lmingw32/i686-w64-mingw32/lib/
 LINK_LIBS 	= -lgdi32 -lws2_32 -llibx264 -llibEasyIPCamera -lavcodec -lavutil -lswscale
 CC 			= g++
 CFLAGS 		= -c -fno-keep-inline-dllexport -O2 -std=gnu++11 -Wall -W -Wextra -fexceptions -mthreads $(DEFINES) $(INCLUDES)
 EXE_NAME 	= EasyScreenCapture
 
-# 使用ffmpeg编码
-#-DENABLED_FFMPEG_ENCODER
+
 
 SRC  := $(wildcard *.cpp Decoder/*.cpp)
 OBJS  := $(SRC:%.cpp=%.o)

@@ -1,0 +1,14 @@
+prefix=/f/ff/usr/ffmpeg-nv-x64-5.0.1
+exec_prefix=${prefix}
+libdir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/lib
+includedir=/f/ff/usr/ffmpeg-nv-x64-5.0.1/include
+
+Name: libavfilter
+Description: FFmpeg audio/video filtering library
+Version: 8.24.100
+Requires: 
+Requires.private: libswscale >= 6.4.100, libpostproc >= 56.3.100, libavformat >= 59.16.100, libavcodec >= 59.18.100, libswresample >= 4.3.100, libavutil >= 57.17.100
+Conflicts:
+Libs: -L${libdir}  -lavfilter 
+Libs.private: nppig.lib nppicc.lib nppc.lib nppidei.lib nppif.lib
+Cflags: -I${includedir}
