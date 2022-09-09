@@ -251,50 +251,44 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         return -1;
     }
 
-    MirrorDriverClient *pClient = (MirrorDriverClient*)pChannelInfo->anyHandle;
-    int                         nChannelId = pChannelInfo->id;
-    int                         fps = pChannelInfo->fps;
-    bool                      draw_mouse = pChannelInfo->draw_mouse;
+    MirrorDriverClient              *pClient             = (MirrorDriverClient*)pChannelInfo->anyHandle;
+    int                                     nChannelId       = pChannelInfo->id;
+    int                                     fps                    = pChannelInfo->fps;
+    bool                                  draw_mouse      = pChannelInfo->draw_mouse;
+    int                                     width                = pChannelInfo->width;
+    int                                     height               = pChannelInfo->height;
 
-    uint8_t *src_data[4];
-    int src_linesize[4];
+    uint8_t                             *src_data[4];
+    int                                     src_linesize[4];
+    uint8_t                             *dst_data[4];
+    int                                     dst_linesize[4];
 
-    uint8_t *dst_data[4];
-    int dst_linesize[4];
+    enum AVPixelFormat         srcFormat = AV_PIX_FMT_RGB32;
+    enum AVPixelFormat         dstFormat = AV_PIX_FMT_YUV420P;
+
+    SwsContext                      *sws_ctx = NULL;
 
 #ifdef ENABLED_FFMPEG_ENCODER
-    const AVCodec *codec;
-    AVCodecContext *c= NULL;
-    AVPacket *pkt = NULL;
-    AVFrame * frame = NULL;
+    const AVCodec                *codec;
+    AVCodecContext             *c= NULL;
+    AVPacket                         *pkt = NULL;
+    AVFrame                         *frame = NULL;
+#else
+    int                                   yuvSize = width*height*1.5;
+    int                                   datasize;
+    bool                                keyframe;
+    uint8_t                            *encode_data;
 #endif
 
-    SwsContext *sws_ctx = NULL;
-
-    enum AVPixelFormat srcFormat = AV_PIX_FMT_RGB32;
-    enum AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P;
-
-    int width = pChannelInfo->width;
-    int height = pChannelInfo->height;
-
-    int ret;
-    int index = 0;
-    int yuvSize = width*height*1.5;
-
-    int datasize;
-    bool keyframe;
-
-    uint8_t *encode_data;
-
-    int64_t pts = 0;
-    // 每一帧时间（微秒）
-    double frametime = 1000000.0f / fps;
-    // 时间基准（按fps计算，每次累加每帧时间，然后修复）
-    double frameclock = 0;
-    StopWatch watch;
+    int                                   ret;
+    int64_t                             pts = 0;
+    double                            frametime = 1000000.0f / fps; // 每一帧时间（微秒）
+    double                            frameclock = 0;  // 时间基准（按fps计算，每次累加每帧时间，然后修复）
+    StopWatch                      watch;
 
 #ifdef TEST_FPS
-    StopWatch watchFPS;
+    int                                    index = 0;
+    StopWatch                        watchFPS;
 #endif
 
     HDC                                 dest_hdc = NULL;
@@ -323,7 +317,6 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             fprintf(stderr, "[channel %d] Could not sws_getContext.\n", nChannelId);
             break;
         }
-
 
 #ifdef ENABLED_FFMPEG_ENCODER
         // codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -581,21 +574,20 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
 int main(int argc, char *argv[])
 {
-    int fps = 60;
-    int OutputCount = 1;
-    char* ConfigName=	"channel";
+    int                     fps = 60;
+    bool                  draw_mouse = false;
+    int                     OutputCount = 1;
+    char                  *ConfigName=	"channel";
 
-    char szIP[16] = {0};
-    int nServerPort = 554;
+    char                   szIP[16] = {0};
+    int                      nServerPort = 554;
 
-    uint8_t  sps[100];
-    uint8_t  pps[100];
-    long    spslen;
-    long    ppslen;
+    uint8_t                 sps[100];
+    uint8_t                 pps[100];
+    long                    spslen;
+    long                    ppslen;
 
     enum AVHWDeviceType type;
-
-    bool draw_mouse = false;
 
 #ifdef ENABLED_FFMPEG_LOG
     av_log_set_level(AV_LOG_TRACE);
