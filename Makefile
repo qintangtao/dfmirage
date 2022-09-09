@@ -21,7 +21,9 @@ DEFINES		= -DTEST_FPS -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
 # 启用ffmpeg编码
 DEFINES		+= -DENABLED_FFMPEG_ENCODER
 # 启用ffmpeg日志
-#DEFINES		+= -ENABLED_FFMPEG_LOG
+#DEFINES		+= -DENABLED_FFMPEG_LOG
+# 计算FPS
+DEFINES		+= -DTEST_FPS
 LINK_OPTS 	= -L../dfmirage/Decoder/libx264-x64/lib -L../dfmirage/IPCamera64/lib -L../dfmirage/ffmpeg64/lib -Lmingw32/i686-w64-mingw32/lib/
 LINK_LIBS 	= -lgdi32 -lws2_32 -llibx264 -llibEasyIPCamera -lavcodec -lavutil -lswscale
 CC 			= g++
