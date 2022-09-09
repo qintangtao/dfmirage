@@ -45,6 +45,8 @@ typedef struct tagSOURCE_CHANNEL_T
     int width;
     int height;
     int fps;
+
+    bool draw_mouse;
 }SOURCE_CHANNEL_T;
 
 static bool GetLocalIP(char* ip)
@@ -185,6 +187,62 @@ static int __EasyIPCamera_Callback(Easy_I32 channelId, EASY_IPCAMERA_STATE_T cha
     return 0;
 }
 
+/**
+ * Paints a mouse pointer in a Win32 image.
+ *
+ * @param dest_hdc desktop image
+ */
+static void paint_mouse_pointer(HDC dest_hdc)
+{
+    CURSORINFO ci = {0};
+    ci.cbSize = sizeof(ci);
+
+    if (GetCursorInfo(&ci)) {
+        HCURSOR icon = CopyCursor(ci.hCursor);
+        ICONINFO info;
+        POINT pos;
+        info.hbmMask = NULL;
+        info.hbmColor = NULL;
+
+        if (ci.flags != CURSOR_SHOWING)
+            return;
+
+        if (!icon) {
+            /* Use the standard arrow cursor as a fallback.
+             * You'll probably only hit this in Wine, which can't fetch
+             * the current system cursor. */
+            icon = CopyCursor(LoadCursor(NULL, IDC_ARROW));
+        }
+
+        if (!GetIconInfo(icon, &info)) {
+            printf("Could not get icon info");
+            goto icon_error;
+        }
+
+        //that would keep the correct location of mouse with hidpi screens
+        pos.x = ci.ptScreenPos.x  - info.xHotspot;
+        pos.y = ci.ptScreenPos.y  - info.yHotspot;
+
+        //printf("Cursor pos (%li,%li) -> (%li,%li)\n", ci.ptScreenPos.x, ci.ptScreenPos.y, pos.x, pos.y);
+#if 1
+        DrawIconEx(dest_hdc, pos.x, pos.y, icon, 0, 0, 0, NULL, DI_NORMAL);
+#else
+        if (!DrawIcon(dest_hdc, pos.x, pos.y, icon))
+            printf("Couldn't draw icon");
+#endif
+
+icon_error:
+        if (info.hbmMask)
+            DeleteObject(info.hbmMask);
+        if (info.hbmColor)
+            DeleteObject(info.hbmColor);
+        if (icon)
+            DestroyCursor(icon);
+    } else {
+        printf("Couldn't get cursor info");
+    }
+}
+
 unsigned int _stdcall  CaptureScreenThread(void* lParam)
 {
     SOURCE_CHANNEL_T* pChannelInfo = (SOURCE_CHANNEL_T*)lParam;
@@ -194,8 +252,9 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     }
 
     MirrorDriverClient *pClient = (MirrorDriverClient*)pChannelInfo->anyHandle;
-    int nChannelId = pChannelInfo->id;
-    int fps = pChannelInfo->fps;
+    int                         nChannelId = pChannelInfo->id;
+    int                         fps = pChannelInfo->fps;
+    bool                      draw_mouse = pChannelInfo->draw_mouse;
 
     uint8_t *src_data[4];
     int src_linesize[4];
@@ -238,6 +297,11 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     StopWatch watchFPS;
 #endif
 
+    HDC                                 dest_hdc = NULL;
+    BITMAPINFO                     bmi;
+    VOID                                *pBits ;
+    HBITMAP                          hbmp = NULL;
+
     do
     {
         ret = av_image_alloc(src_data, src_linesize, width, height, srcFormat, 1);
@@ -260,7 +324,6 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             break;
         }
 
-        src_data[0] = (uint8_t *)pClient->getBuffer();
 
 #ifdef ENABLED_FFMPEG_ENCODER
         // codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -338,6 +401,37 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         */
 #endif
 
+        if (draw_mouse)
+        {
+            dest_hdc = CreateCompatibleDC(NULL);
+            if (!dest_hdc) {
+                fprintf(stderr, "[channel %d] CreateCompatibleDC Failed.\n", nChannelId);
+                break;
+            }
+
+            bmi.bmiHeader.biSize                        = sizeof(BITMAPINFOHEADER);
+            bmi.bmiHeader.biWidth                    = width;
+            bmi.bmiHeader.biHeight                   = height;
+            bmi.bmiHeader.biPlanes                   = 1;
+            bmi.bmiHeader.biBitCount                = 32;
+            bmi.bmiHeader.biCompression         = BI_RGB;
+            bmi.bmiHeader.biSizeImage             = bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * bmi.bmiHeader.biBitCount / 8;
+            bmi.bmiHeader.biXPelsPerMeter       = 0;
+            bmi.bmiHeader.biYPelsPerMeter       = 0;
+            bmi.bmiHeader.biClrUsed                 = 0;
+            bmi.bmiHeader.biClrImportant          = 0;
+
+            hbmp = ::CreateDIBSection (dest_hdc, (BITMAPINFO *)  &bmi, DIB_RGB_COLORS, &pBits, NULL, 0) ;
+            if (!hbmp) {
+                fprintf(stderr, "[channel %d] Creating DIB Section Failed.\n", nChannelId);
+                break;
+            }
+
+            SelectObject(dest_hdc, hbmp);
+        }
+
+        //src_data[0] = (uint8_t *)pClient->getBuffer();
+
         printf("[channel %d] Start\n", nChannelId);
         while (pChannelInfo&&pChannelInfo->bThreadLiving)
         {
@@ -359,6 +453,25 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             {
                 frameclock = 0;
                 watch.Start();
+            }
+
+            if (draw_mouse)
+            {
+                // 由于绘制的鼠标是倒置的，底图需要倒置拷贝
+                for (int i = 0; i < height; i++) {
+                    memcpy((char *)pBits + (i * width * 4), (char *)pClient->getBuffer() + ((height - i - 1) * width * 4), width*4);
+                }
+
+                paint_mouse_pointer(dest_hdc);
+
+                // 翻转底图
+                for (int i = 0; i < height; i++) {
+                    memcpy((char *)src_data[0] + ((height - i - 1) * width * 4), (char *)pBits + (i * width * 4), width*4);
+                }
+            }
+            else
+            {
+                memcpy(src_data[0], pClient->getBuffer(), width*height*4);
             }
 
 #ifdef ENABLED_FFMPEG_ENCODER
@@ -452,9 +565,14 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 #endif
 
     // 崩溃，暂时注释掉
-    //av_freep(&src_data[0]);
+    av_freep(&src_data[0]);
     av_freep(&dst_data[0]);
     sws_freeContext(sws_ctx);
+
+    if (dest_hdc)
+        DeleteDC(dest_hdc);
+    if (hbmp)
+        DeleteObject(hbmp);
 
     printf("[channel %d] Stop\n", nChannelId);
 
@@ -472,27 +590,32 @@ int main(int argc, char *argv[])
 
     uint8_t  sps[100];
     uint8_t  pps[100];
-    long spslen;
-    long ppslen;
+    long    spslen;
+    long    ppslen;
 
     enum AVHWDeviceType type;
+
+    bool draw_mouse = false;
 
 #ifdef ENABLED_FFMPEG_LOG
     av_log_set_level(AV_LOG_TRACE);
     av_log_set_callback(__FFmpegLog_Callback);
 #endif
 
-    if (argc >= 2)
-    {
-        fps = atoi(argv[1]);
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <fps> <draw_mouse>\n", argv[0]);
+        return -1;
     }
 
-    fprintf(stderr, "fps:%d\n", fps);
+    fps = atoi(argv[1]);
+    draw_mouse= atoi(argv[2]) != 0;
 
-    fprintf(stderr, "Available device types:");
+    fprintf(stdout, "fps:%d, draw_mouse:%d\n", fps, draw_mouse);
+
+    fprintf(stdout, "Available device types:");
     while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
-        fprintf(stderr, " %s", av_hwdevice_get_type_name(type));
-    fprintf(stderr, "\n");
+        fprintf(stdout, " %s", av_hwdevice_get_type_name(type));
+    fprintf(stdout, "\n");
 
     MirrorDriverClient client;
     if (client.getBuffer() == NULL)
@@ -544,6 +667,8 @@ int main(int argc, char *argv[])
         channels[i].fps = fps;
 
         channels[i].anyHandle = &client;
+
+        channels[i].draw_mouse = draw_mouse;
 
         channels[i].encoder = new H264Encoder();
         channels[i].encoder->Init(width, height, fps, 30, 4096, 1, 20, 0);
