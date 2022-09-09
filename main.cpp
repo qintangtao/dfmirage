@@ -331,6 +331,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 #define TEST_FPS
         double dealyFault = 0;
         StopWatch watch;
+        StopWatch watchD;
 #ifdef TEST_FPS
         StopWatch watchFPS;
 #endif
@@ -409,14 +410,43 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
             watch.End();
 
+#if 1
             if (dealy > watch.costTime)
             {
                 double dealyDiff = dealy - watch.costTime;
+                //printf("[channel %d] Index:%d, Diff:%f, costTime:%f\n", nChannelId, index, dealyDiff, watch.costTime);
+
                 if (dealyFault < dealyDiff) {
                     dealyDiff -= dealyFault;
                     dealyFault = 0;
                     //printf("[channel %d] Index:%d, Diff:%ld, costTime:%f\n", nChannelId, index, dealyDiff, watch.costTime);
+#if 0
                     StopWatch::SleepPerformUS(dealyDiff);
+#else
+                    DWORD dwMilliseconds = dealyDiff/1000;
+                    if (dwMilliseconds > 0)
+                    {
+                        watchD.Start();
+                        ::MsgWaitForMultipleObjectsEx(0, NULL, dwMilliseconds, QS_ALLPOSTMESSAGE, MWMO_INPUTAVAILABLE);
+                        watchD.End();
+
+                        // 计算真实等待时间
+                        if (watchD.costTime > dealyDiff)
+                        {
+                            // 实际等待时间超时，下次少等
+                            dealyFault += (watchD.costTime - dealyDiff);
+                        }
+                        else if (watchD.costTime < dealyDiff)
+                        {
+                            // 实际等待时间不够，下次多等
+                            dealyFault -= (dealyDiff - watchD.costTime);
+                        }
+                    }
+                    else
+                    {
+                        dealyFault = dealyDiff;
+                    }
+#endif
                 } else {
                     dealyFault -= dealyDiff;
                     dealyDiff = 0;
@@ -427,6 +457,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                 dealyFault += (watch.costTime - dealy);
                 //printf("[channel %d] ===== Index:%d, costTime:%f, dealy:%f, dealyFault:%f\n", nChannelId, index, watch.costTime, dealy, dealyFault);
             }
+#endif
 
             index++;
 
