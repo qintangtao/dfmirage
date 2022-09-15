@@ -311,23 +311,6 @@ unsigned int _stdcall  CaptureMouseThread(void* lParam)
             continue;
         }
 
-        if (iconInfo.hbmMask == NULL) {
-            fprintf(stderr, "[channel %d] hbmMask is null.\n", channelId);
-            goto mouse_error;
-        }
-
-        isColorShape = (iconInfo.hbmColor != NULL);
-
-        if (!GetObject(iconInfo.hbmMask, sizeof(BITMAP), (LPVOID)&bmMask)) {
-            fprintf(stderr, "[channel %d] Get BITMAP Failed.\n", channelId);
-            goto mouse_error;
-        }
-
-        if (bmMask.bmPlanes != 1 || bmMask.bmBitsPixel != 1) {
-            fprintf(stderr, "[channel %d] bmMask.bmPlanes!=1 or bmMask.bmBitsPixel != 1  .\n", channelId);
-            goto mouse_error;
-        }
-
         // 1. 位置
         x = cursorInfo.ptScreenPos.x  - iconInfo.xHotspot;
         y = cursorInfo.ptScreenPos.y  - iconInfo.yHotspot;
@@ -346,6 +329,23 @@ unsigned int _stdcall  CaptureMouseThread(void* lParam)
 
         // 2. 形状
         if (lastHCursor == hCursor) {
+            goto mouse_error;
+        }
+
+        if (iconInfo.hbmMask == NULL) {
+            fprintf(stderr, "[channel %d] hbmMask is null.\n", channelId);
+            goto mouse_error;
+        }
+
+        isColorShape = (iconInfo.hbmColor != NULL);
+
+        if (!GetObject(iconInfo.hbmMask, sizeof(BITMAP), (LPVOID)&bmMask)) {
+            fprintf(stderr, "[channel %d] Get BITMAP Failed.\n", channelId);
+            goto mouse_error;
+        }
+
+        if (bmMask.bmPlanes != 1 || bmMask.bmBitsPixel != 1) {
+            fprintf(stderr, "[channel %d] bmMask.bmPlanes!=1 or bmMask.bmBitsPixel != 1  .\n", channelId);
             goto mouse_error;
         }
 
@@ -683,16 +683,14 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                     AutoLock lock(cursorMutex);
 
                     char *pixel;
-                    char *pixelMouse;
+                    char *pixelCursor;
                     char *pixelsBuffer = (char *)src_data[0];
-                    char *pixelsBufferMouse = (char *)cursorShape->buffer;
+                    char *pixelsBufferCursor = (char *)cursorShape->buffer;
                     int pixelSize = 4;
                     int iMaxRow = cursorShape->y + cursorShape->height;
-                    if (iMaxRow > height)
-                        iMaxRow = height;
+                    if (iMaxRow > height) iMaxRow = height;
                     int iMaxCol = cursorShape->x + cursorShape->width;
-                    if (iMaxCol > width)
-                        iMaxCol = width;
+                    if (iMaxCol > width) iMaxCol = width;
 
 #ifdef _DEBUG
                     printf("[channel %d] draw mouse x:%d, y:%d, w:%d, h:%d, w:%d, h:%d\n",
@@ -702,10 +700,10 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                     for (int iRow = cursorShape->y; iRow < iMaxRow; iRow++) {
                       for (int iCol = cursorShape->x; iCol < iMaxCol; iCol++) {
                         pixel = pixelsBuffer + (iRow * width + iCol) * pixelSize;
-                        pixelMouse = pixelsBufferMouse + ((cursorShape->height - 1 - (iRow - cursorShape->y)) * cursorShape->width + (iCol - cursorShape->x)) * pixelSize;
+                        pixelCursor = pixelsBufferCursor + ((cursorShape->height - 1 - (iRow - cursorShape->y)) * cursorShape->width + (iCol - cursorShape->x)) * pixelSize;
 #if 1
                         // Alpha
-                        if (pixelMouse[3] == 0)
+                        if (pixelCursor[3] == 0)
                             continue;
 #else
                         if (pixelMouse[0] == 0 &&
@@ -715,7 +713,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                             continue;
 #endif
 
-                        memcpy(pixel, pixelMouse, pixelSize);
+                        memcpy(pixel, pixelCursor, pixelSize);
                       }
                     }
 
@@ -877,7 +875,7 @@ int main(int argc, char *argv[])
 #endif
 
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s <fps> <draw_mouse>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <fps(20-120)> <draw_mouse(1/0)>\n", argv[0]);
         getchar();
         return -1;
     }
