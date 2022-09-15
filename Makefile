@@ -16,7 +16,7 @@
 # 百分号相当于一个通配符
 
 PREFIX 		= ../dfmirage/bin64
-INCLUDES	= -I../dfmirage -I. -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
+INCLUDES	= -I../dfmirage -I. -I./thread -I./exception -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
 DEFINES		= -DTEST_FPS -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
 # 启用ffmpeg编码
 DEFINES		+= -DENABLED_FFMPEG_ENCODER
@@ -32,7 +32,7 @@ EXE_NAME 	= EasyScreenCapture
 
 
 
-SRC  := $(wildcard *.cpp Decoder/*.cpp)
+SRC  := $(wildcard *.cpp Decoder/*.cpp thread/*.cpp exception/*.cpp)
 OBJS  := $(SRC:%.cpp=%.o)
 
 #all:

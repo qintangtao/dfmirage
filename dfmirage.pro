@@ -32,9 +32,13 @@ SOURCES += main.cpp \
     RegistryKey.cpp \
     Decoder/H264Encoder.cpp \
     MirrorDriverClient.cpp \
-    Exception.cpp \
     StringStorage.cpp \
-    PixelFormat.cpp
+    PixelFormat.cpp \
+    thread/AutoLock.cpp \
+    thread/GlobalMutex.cpp \
+    thread/LocalMutex.cpp \
+    exception/SystemException.cpp \
+    exception/Exception.cpp
 
 
 HEADERS += \
@@ -42,13 +46,18 @@ HEADERS += \
     DisplayEsc.h \
     Decoder/H264Encoder.h \
     MirrorDriverClient.h \
-    Exception.h \
     StringStorage.h \
     PixelFormat.h \
     Dimension.h \
     Point.h \
     Rect.h \
-    StopWatch.h
+    StopWatch.h \
+    thread/AutoLock.h \
+    thread/GlobalMutex.h \
+    thread/LocalMutex.h \
+    thread/Lockable.h \
+    exception/SystemException.h \
+    exception/Exception.h
 
 win32: LIBS += -lgdi32 -llibws2_32
 
@@ -60,4 +69,6 @@ LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavutil -lswscale
 
 INCLUDEPATH += $$PWD/Decoder/include \
                $$PWD/IPCamera/include \
-               $$PWD/ffmpeg/include
+               $$PWD/ffmpeg/include \
+               $$PWD/thread \
+              $$PWD/exception

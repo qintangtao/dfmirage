@@ -7,6 +7,8 @@
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"
 #include "StopWatch.h"
+#include "AutoLock.h"
+#include "LocalMutex.h"
 
 extern "C"
 {
@@ -27,6 +29,16 @@ extern "C"
     #define USleep(x) usleep(x)
 #endif
 
+typedef struct tagCursorShape
+{
+    int x;
+    int y;
+    int width;
+    int height;
+    int widthBytes;
+    void *buffer;
+} CursorShape;
+
 typedef struct tagSOURCE_CHANNEL_T
 {
     int		id;
@@ -38,6 +50,7 @@ typedef struct tagSOURCE_CHANNEL_T
     void*	anyHandle;
 
     HANDLE thread;
+    HANDLE thread_mouse;
     bool		bThreadLiving;
 
     H264Encoder *encoder;
@@ -47,6 +60,8 @@ typedef struct tagSOURCE_CHANNEL_T
     int fps;
 
     bool draw_mouse;
+    CursorShape  cursorShape;
+    Lockable        *cursorMutex;
 }SOURCE_CHANNEL_T;
 
 static bool GetLocalIP(char* ip)
@@ -187,11 +202,6 @@ static int __EasyIPCamera_Callback(Easy_I32 channelId, EASY_IPCAMERA_STATE_T cha
     return 0;
 }
 
-/**
- * Paints a mouse pointer in a Win32 image.
- *
- * @param dest_hdc desktop image
- */
 static void paint_mouse_pointer(HDC dest_hdc)
 {
     CURSORINFO ci = {0};
@@ -243,6 +253,216 @@ icon_error:
     }
 }
 
+unsigned int _stdcall  CaptureMouseThread(void* lParam)
+{
+    SOURCE_CHANNEL_T* channelInfo = (SOURCE_CHANNEL_T*)lParam;
+    if (!channelInfo)
+    {
+        return -1;
+    }
+
+    int                 channelId       = channelInfo->id;
+    int                 fps                 = channelInfo->fps;
+    CursorShape  *cursorShape = &channelInfo->cursorShape;
+    Lockable        *cursorMutex = channelInfo->cursorMutex;
+    double          frametime      = 1000000.0f / fps; // 每一帧时间（微秒）
+
+    bool isColorShape;
+    int x;
+    int y;
+    int width;
+    int height;
+    int widthBytes;
+
+    HCURSOR hCursor;
+    HCURSOR lastHCursor;
+    ICONINFO iconInfo;
+    CURSORINFO cursorInfo;
+    BITMAP bmMask;
+
+    HDC                                 hdc = NULL;
+    BITMAPINFO                     bmi;
+    VOID                                *pBits ;
+    HBITMAP                          hbmp = NULL;
+    HBITMAP                          hbmOld = NULL;
+
+    printf("[channel %d] Mouse Start\n", channelId);
+    while (channelInfo->bThreadLiving)
+    {
+        ::Sleep(20);
+        if (channelInfo->pushStream == 0) {
+            continue;
+        }
+
+        cursorInfo.cbSize = sizeof(CURSORINFO);
+        if (GetCursorInfo(&cursorInfo) == 0) {
+            fprintf(stderr, "[channel %d] GetCursorInfo Failed.\n", channelId);
+            continue;
+        }
+
+        hCursor = cursorInfo.hCursor;
+        if (hCursor == 0) {
+            fprintf(stderr, "[channel %d] hCursor is null.\n", channelId);
+            continue;
+        }
+
+        if (!GetIconInfo(hCursor, &iconInfo)) {
+            fprintf(stderr, "[channel %d] GetIconInfo Failed.\n", channelId);
+            continue;
+        }
+
+        if (iconInfo.hbmMask == NULL) {
+            fprintf(stderr, "[channel %d] hbmMask is null.\n", channelId);
+            goto mouse_error;
+        }
+
+        isColorShape = (iconInfo.hbmColor != NULL);
+
+        if (!GetObject(iconInfo.hbmMask, sizeof(BITMAP), (LPVOID)&bmMask)) {
+            fprintf(stderr, "[channel %d] Get BITMAP Failed.\n", channelId);
+            goto mouse_error;
+        }
+
+        if (bmMask.bmPlanes != 1 || bmMask.bmBitsPixel != 1) {
+            fprintf(stderr, "[channel %d] bmMask.bmPlanes!=1 or bmMask.bmBitsPixel != 1  .\n", channelId);
+            goto mouse_error;
+        }
+
+        // 1. 位置
+        x = cursorInfo.ptScreenPos.x  - iconInfo.xHotspot;
+        y = cursorInfo.ptScreenPos.y  - iconInfo.yHotspot;
+
+        if (x != cursorShape->x || y != cursorShape->y)
+        {
+            //加锁
+            AutoLock lock(cursorMutex);
+
+            cursorShape->x = x;
+            cursorShape->y = y;
+#ifdef _DEBUG
+            fprintf(stderr, "[channel %d] update cursor pos. x:%d,  y:%d .\n", channelId, x, y);
+#endif
+        }
+
+        // 2. 形状
+        if (lastHCursor == hCursor) {
+            goto mouse_error;
+        }
+
+        width = bmMask.bmWidth;
+        height = isColorShape ? bmMask.bmHeight : bmMask.bmHeight/2;
+        widthBytes = bmMask.bmWidthBytes;
+
+        // 绘制
+        hdc = CreateCompatibleDC(NULL);
+        if (!hdc) {
+            fprintf(stderr, "[channel %d] CreateCompatibleDC Failed.\n", channelId);
+            goto mouse_error;
+        }
+
+        bmi.bmiHeader.biSize                        = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth                    = width;
+        bmi.bmiHeader.biHeight                   = height;
+        bmi.bmiHeader.biPlanes                   = 1;
+        bmi.bmiHeader.biBitCount                = 32;
+        bmi.bmiHeader.biCompression         = BI_RGB;
+        bmi.bmiHeader.biSizeImage             = bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * bmi.bmiHeader.biBitCount / 8;
+        bmi.bmiHeader.biXPelsPerMeter       = 0;
+        bmi.bmiHeader.biYPelsPerMeter       = 0;
+        bmi.bmiHeader.biClrUsed                 = 0;
+        bmi.bmiHeader.biClrImportant          = 0;
+
+        hbmp = ::CreateDIBSection (hdc, (BITMAPINFO *)  &bmi, DIB_RGB_COLORS, &pBits, NULL, 0) ;
+        if (!hbmp) {
+            fprintf(stderr, "[channel %d] Creating DIB Section Failed.\n", channelId);
+            goto mouse_error;
+        }
+
+        hbmOld = (HBITMAP)SelectObject(hdc, hbmp);
+
+        DrawIconEx(hdc, 0, 0, hCursor, 0, 0, 0, NULL, DI_IMAGE);
+
+#if 0
+       {
+            BITMAPFILEHEADER fileHeader;
+           fileHeader.bfType = 0x4d42; // BM
+           fileHeader.bfReserved1 = 0;
+           fileHeader.bfReserved2 = 0;
+           fileHeader.bfSize = bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4 + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+           fileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+
+            FILE *f = fopen("dfmirage_mouse.bmp", "w");
+            if (f)
+            {
+                fwrite(&fileHeader, 1, sizeof(BITMAPFILEHEADER), f);
+                fwrite(&bmi.bmiHeader, 1, sizeof(BITMAPINFOHEADER), f);
+                fwrite(pBits, 1, bmi.bmiHeader.biSizeImage, f);
+                fclose(f);
+            }
+       }
+#endif
+
+        //加锁
+        cursorMutex->lock();
+        if (cursorShape->buffer && (cursorShape->width * cursorShape->height * 4) < bmi.bmiHeader.biSizeImage)
+        {
+            free(cursorShape->buffer);
+            cursorShape->buffer = 0;
+        }
+        if (!cursorShape->buffer)
+        {
+            cursorShape->buffer = malloc(bmi.bmiHeader.biSizeImage);
+            if (!cursorShape->buffer)
+            {
+                fprintf(stderr, "[channel %d] new buffer Failed.\n", channelId);
+                //解锁
+                cursorMutex->unlock();
+                goto mouse_error;
+            }
+        }
+
+        memcpy(cursorShape->buffer, pBits, bmi.bmiHeader.biSizeImage);
+
+        cursorShape->width = width;
+        cursorShape->height = height;
+        cursorShape->widthBytes = widthBytes;
+        cursorMutex->unlock();
+
+#ifdef _DEBUG
+        fprintf(stderr, "[channel %d] update cursor shape. width:%d,  height:%d .\n", channelId, width, height);
+#endif
+
+        // 更新
+        lastHCursor = hCursor;
+
+mouse_error:
+        if (hbmOld) {
+            SelectObject(hdc, hbmOld);
+            hbmOld = NULL;
+        }
+        if (hbmp) {
+            DeleteObject(hbmp);
+            hbmp = NULL;
+        }
+        if (hdc) {
+            DeleteDC(hdc);
+            hdc = NULL;
+        }
+        if (iconInfo.hbmMask) {
+            DeleteObject(iconInfo.hbmMask);
+            iconInfo.hbmMask = NULL;
+        }
+        if (iconInfo.hbmColor) {
+            DeleteObject(iconInfo.hbmColor);
+            iconInfo.hbmColor = NULL;
+        }
+    }
+
+    printf("[channel %d] Mouse Stop\n", channelId);
+
+    return 0;
+}
+
 unsigned int _stdcall  CaptureScreenThread(void* lParam)
 {
     SOURCE_CHANNEL_T* pChannelInfo = (SOURCE_CHANNEL_T*)lParam;
@@ -257,6 +477,8 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     bool                                  draw_mouse      = pChannelInfo->draw_mouse;
     int                                     width                = pChannelInfo->width;
     int                                     height               = pChannelInfo->height;
+    CursorShape                     *cursorShape     = &pChannelInfo->cursorShape;
+    Lockable                           *cursorMutex    = pChannelInfo->cursorMutex;
 
     uint8_t                             *src_data[4];
     int                                     src_linesize[4];
@@ -289,12 +511,15 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 #ifdef TEST_FPS
     int                                    index = 0;
     StopWatch                        watchFPS;
+    StopWatch                        watchMouse;
 #endif
 
+#ifdef DIRECT_DRAW_MOUSE
     HDC                                 dest_hdc = NULL;
     BITMAPINFO                     bmi;
     VOID                                *pBits ;
     HBITMAP                          hbmp = NULL;
+#endif
 
     do
     {
@@ -394,6 +619,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         */
 #endif
 
+#ifdef DIRECT_DRAW_MOUSE
         if (draw_mouse)
         {
             dest_hdc = CreateCompatibleDC(NULL);
@@ -422,10 +648,9 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
             SelectObject(dest_hdc, hbmp);
         }
+#endif
 
-        //src_data[0] = (uint8_t *)pClient->getBuffer();
-
-        printf("[channel %d] Start\n", nChannelId);
+        printf("[channel %d] Screen Start\n", nChannelId);
         while (pChannelInfo&&pChannelInfo->bThreadLiving)
         {
             if (pChannelInfo->pushStream == 0) {
@@ -450,17 +675,72 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
             if (draw_mouse)
             {
+#ifndef DIRECT_DRAW_MOUSE
+                memcpy(src_data[0], pClient->getBuffer(), width*height*4);
+
+                if (NULL !=cursorShape->buffer && cursorShape->x >= 0 && cursorShape->y >= 0)
+                {
+                    AutoLock lock(cursorMutex);
+
+                    char *pixel;
+                    char *pixelMouse;
+                    char *pixelsBuffer = (char *)src_data[0];
+                    char *pixelsBufferMouse = (char *)cursorShape->buffer;
+                    int pixelSize = 4;
+                    int iMaxRow = cursorShape->y + cursorShape->height;
+                    if (iMaxRow > height)
+                        iMaxRow = height;
+                    int iMaxCol = cursorShape->x + cursorShape->width;
+                    if (iMaxCol > width)
+                        iMaxCol = width;
+
+#ifdef _DEBUG
+                    printf("[channel %d] draw mouse x:%d, y:%d, w:%d, h:%d, w:%d, h:%d\n",
+                           nChannelId, cursorShape->x, cursorShape->y, cursorShape->width, cursorShape->height, width, height);
+#endif
+
+                    for (int iRow = cursorShape->y; iRow < iMaxRow; iRow++) {
+                      for (int iCol = cursorShape->x; iCol < iMaxCol; iCol++) {
+                        pixel = pixelsBuffer + (iRow * width + iCol) * pixelSize;
+                        pixelMouse = pixelsBufferMouse + ((cursorShape->height - 1 - (iRow - cursorShape->y)) * cursorShape->width + (iCol - cursorShape->x)) * pixelSize;
+#if 1
+                        // Alpha
+                        if (pixelMouse[3] == 0)
+                            continue;
+#else
+                        if (pixelMouse[0] == 0 &&
+                                pixelMouse[1] == 0 &&
+                                pixelMouse[2] == 0 &&
+                                pixelMouse[3] == 0)
+                            continue;
+#endif
+
+                        memcpy(pixel, pixelMouse, pixelSize);
+                      }
+                    }
+
+                }
+
+                //watchMouse.Start();
+                //paint_mouse_pointer2((char *)src_data[0], width, height);
+                //watchMouse.End();
+                //printf("[channel %d] paint mouse time:%f\n", nChannelId, watchMouse.costTime);
+#else
                 // 由于绘制的鼠标是倒置的，底图需要倒置拷贝
                 for (int i = 0; i < height; i++) {
                     memcpy((char *)pBits + (i * width * 4), (char *)pClient->getBuffer() + ((height - i - 1) * width * 4), width*4);
                 }
 
+                //watchMouse.Start();
                 paint_mouse_pointer(dest_hdc);
+                //watchMouse.End();
+                //printf("[channel %d] paint mouse time:%f\n", nChannelId, watchMouse.costTime);
 
                 // 翻转底图
                 for (int i = 0; i < height; i++) {
                     memcpy((char *)src_data[0] + ((height - i - 1) * width * 4), (char *)pBits + (i * width * 4), width*4);
                 }
+#endif
             }
             else
             {
@@ -562,12 +842,14 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     av_freep(&dst_data[0]);
     sws_freeContext(sws_ctx);
 
+#ifdef DIRECT_DRAW_MOUSE
     if (dest_hdc)
         DeleteDC(dest_hdc);
     if (hbmp)
         DeleteObject(hbmp);
+#endif
 
-    printf("[channel %d] Stop\n", nChannelId);
+    printf("[channel %d] Screen Stop\n", nChannelId);
 
     return 0;
 }
@@ -596,6 +878,7 @@ int main(int argc, char *argv[])
 
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <fps> <draw_mouse>\n", argv[0]);
+        getchar();
         return -1;
     }
 
@@ -666,6 +949,13 @@ int main(int argc, char *argv[])
         channels[i].encoder->Init(width, height, fps, 30, 4096, 1, 20, 0);
         channels[i].encoder->GetSPSAndPPS(sps, spslen, pps, ppslen);
 
+        channels[i].cursorShape.x = 0;
+        channels[i].cursorShape.y = 0;
+        channels[i].cursorShape.width = 0;
+        channels[i].cursorShape.height = 0;
+        channels[i].cursorShape.widthBytes = 0;
+        channels[i].cursorShape.buffer = 0;
+
         memset(&channels[i].mediaInfo, 0x00, sizeof(EASY_MEDIA_INFO_T));
         channels[i].mediaInfo.u32VideoCodec =   EASY_SDK_VIDEO_CODEC_H264;
         channels[i].mediaInfo.u32VideoFps = fps;
@@ -680,7 +970,10 @@ int main(int argc, char *argv[])
         memcpy(channels[i].mediaInfo.u8Sps, sps,  spslen);			/* 视频sps帧内容 */
         memcpy(channels[i].mediaInfo.u8Pps, pps, ppslen);				/* 视频sps帧内容 */
 
+        channels[i].cursorMutex = new LocalMutex();
+
         channels[i].thread = (HANDLE)_beginthreadex(NULL, 0, CaptureScreenThread, (void*)&channels[i],0,0);
+        channels[i].thread_mouse = (HANDLE)_beginthreadex(NULL, 0, CaptureMouseThread, (void*)&channels[i],0,0);
         channels[i].bThreadLiving		= true;
 
         printf("rtspserver output stream url:	   %s\n", rtsp_url);
