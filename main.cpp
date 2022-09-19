@@ -522,11 +522,13 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             break;
         }
 
+#ifndef ENABLED_LIBYUV_CONVERT
         sws_ctx = sws_getContext(width,height,srcFormat, width,height,dstFormat,SWS_BICUBIC,NULL,NULL,NULL);
         if (sws_ctx == NULL) {
             fprintf(stderr, "[channel %d] Could not sws_getContext.\n", nChannelId);
             break;
         }
+#endif
 
 #ifdef ENABLED_FFMPEG_ENCODER
         //codec = avcodec_find_encoder_by_name("h264_qsv");
@@ -836,7 +838,10 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     // 崩溃，暂时注释掉
     av_freep(&src_data[0]);
     av_freep(&dst_data[0]);
+
+#ifndef ENABLED_LIBYUV_CONVERT
     sws_freeContext(sws_ctx);
+#endif
 
 #ifdef DIRECT_DRAW_MOUSE
     if (dest_hdc)
