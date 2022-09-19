@@ -529,14 +529,16 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         }
 
 #ifdef ENABLED_FFMPEG_ENCODER
-        // codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-        //codec = avcodec_find_encoder_by_name("libx264");
         //codec = avcodec_find_encoder_by_name("h264_qsv");
         codec = avcodec_find_encoder_by_name("h264_nvenc");
         if (NULL == codec)
         {
-            fprintf(stderr, "[channel %d] Could not avcodec_find_encoder.\n", nChannelId);
-            break;
+            codec = avcodec_find_encoder_by_name("libx264");
+            if (NULL == codec)
+            {
+                fprintf(stderr, "[channel %d] Could not avcodec_find_encoder.\n", nChannelId);
+                break;
+            }
         }
 
         c = avcodec_alloc_context3(codec);
