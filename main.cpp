@@ -467,13 +467,18 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
     uint8_t                             *src_data[4];
     int                                     src_linesize[4];
+
+#ifndef ENABLED_FFMPEG_ENCODER
     uint8_t                             *dst_data[4];
     int                                     dst_linesize[4];
+#endif
 
     enum AVPixelFormat         srcFormat = AV_PIX_FMT_RGB32;
     enum AVPixelFormat         dstFormat = AV_PIX_FMT_YUV420P;
 
+#ifndef ENABLED_LIBYUV_CONVERT
     SwsContext                      *sws_ctx = NULL;
+#endif
 
 #ifdef ENABLED_FFMPEG_ENCODER
     const AVCodec                *codec;
@@ -515,12 +520,14 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             break;
         }
 
+#ifndef ENABLED_FFMPEG_ENCODER
         ret = av_image_alloc(dst_data, dst_linesize, width, height, dstFormat, 1);
         if (ret < 0)
         {
             fprintf(stderr, "[channel %d] Could not allocate buffers..\n", nChannelId);
             break;
         }
+#endif
 
 #ifndef ENABLED_LIBYUV_CONVERT
         sws_ctx = sws_getContext(width,height,srcFormat, width,height,dstFormat,SWS_BICUBIC,NULL,NULL,NULL);
@@ -837,7 +844,10 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
     // 崩溃，暂时注释掉
     av_freep(&src_data[0]);
+
+#ifndef ENABLED_FFMPEG_ENCODER
     av_freep(&dst_data[0]);
+#endif
 
 #ifndef ENABLED_LIBYUV_CONVERT
     sws_freeContext(sws_ctx);
