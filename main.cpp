@@ -384,23 +384,7 @@ unsigned int _stdcall  CaptureMouseThread(void* lParam)
         DrawIconEx(hdc, 0, 0, hCursor, 0, 0, 0, NULL, DI_IMAGE);
 
 #if 0
-       {
-            BITMAPFILEHEADER fileHeader;
-           fileHeader.bfType = 0x4d42; // BM
-           fileHeader.bfReserved1 = 0;
-           fileHeader.bfReserved2 = 0;
-           fileHeader.bfSize = bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4 + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-           fileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-
-            FILE *f = fopen("dfmirage_mouse.bmp", "w");
-            if (f)
-            {
-                fwrite(&fileHeader, 1, sizeof(BITMAPFILEHEADER), f);
-                fwrite(&bmi.bmiHeader, 1, sizeof(BITMAPINFOHEADER), f);
-                fwrite(pBits, 1, bmi.bmiHeader.biSizeImage, f);
-                fclose(f);
-            }
-       }
+        saveBMP("dfmirage_mouse.bmp", (uint8_t *)pBits, width, height, 32);
 #endif
 
         //加锁
@@ -746,6 +730,10 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                 memcpy(src_data[0], pClient->getBuffer(), width*height*4);
             }
 
+#if 0
+            saveBMP("dfmirage_bk.bmp", (uint8_t *)src_data[0], width, height, 32);
+#endif
+
 #ifdef ENABLED_FFMPEG_ENCODER
 
 #ifdef ENABLED_LIBYUV_CONVERT
@@ -981,7 +969,8 @@ int main(int argc, char *argv[])
         channels[i].thread = (HANDLE)_beginthreadex(NULL, 0, CaptureScreenThread, (void*)&channels[i],0,0);
 
 #ifndef DIRECT_DRAW_MOUSE
-        channels[i].thread_mouse = (HANDLE)_beginthreadex(NULL, 0, CaptureMouseThread, (void*)&channels[i],0,0);
+        if (draw_mouse)
+            channels[i].thread_mouse = (HANDLE)_beginthreadex(NULL, 0, CaptureMouseThread, (void*)&channels[i],0,0);
 #endif
 
         channels[i].bThreadLiving		= true;
