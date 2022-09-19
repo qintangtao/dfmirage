@@ -3,7 +3,7 @@
 #include <process.h>
 #include <stdio.h>
 #include <tchar.h>
-#include "Decoder/H264Encoder.h"
+#include "libx264/H264Encoder.h"
 #include "libyuv/yuv_util.h"
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"

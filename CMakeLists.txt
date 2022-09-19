@@ -30,8 +30,6 @@ SET (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/bin64)
 
 
 aux_source_directory(. SRC_FILE)
-aux_source_directory(./Decoder SRC_FILE2)
-aux_source_directory(./libyuv SRC_FILE3)
 aux_source_directory(./thread SRC_FILE4)
 aux_source_directory(./exception SRC_FILE5)
 
@@ -39,16 +37,16 @@ include_directories(${CMAKE_SOURCE_DIR}
 					thread
 					exception
 					libyuv/include
-					Decoder/libx264-x64/include
+					libx264/libx264-x64/include
 					IPCamera64/include
 					ffmpeg64/include)
 
-link_directories(libyuv/lib
-					Decoder/libx264-x64/lib
+link_directories(libx264/libx264-x64/lib
 					IPCamera64/lib
-					ffmpeg64/lib)
+					ffmpeg64/lib
+					libyuv/lib)
 
-add_executable(${OUTPUT_NAME} ${SRC_FILE} ${SRC_FILE2} ${SRC_FILE3} ${SRC_FILE4} ${SRC_FILE5})
+add_executable(${OUTPUT_NAME} ${SRC_FILE} ${SRC_FILE4} ${SRC_FILE5})
 
 target_compile_definitions(${OUTPUT_NAME}
                             PRIVATE
@@ -58,13 +56,16 @@ target_compile_definitions(${OUTPUT_NAME}
                             ENABLED_LIBYUV_CONVERT		# 使用libyuv转换(RGB32->YV12)
                             )
 
+add_subdirectory(libyuv)
+add_subdirectory(libx264)
+
 target_link_libraries(${OUTPUT_NAME}
 						PRIVATE
 						gdi32
 						ws2_32
-						libx264
 						libEasyIPCamera
 						avcodec
 						avutil
 						swscale
-						libyuv)
+						yuvUtils
+						libx264Utils)

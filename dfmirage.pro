@@ -32,7 +32,7 @@ CONFIG(debug, debug|release) {
 
 SOURCES += main.cpp \
     RegistryKey.cpp \
-    Decoder/H264Encoder.cpp \
+    libx264/H264Encoder.cpp \
     libyuv/yuv_util.cpp \
     MirrorDriverClient.cpp \
     StringStorage.cpp \
@@ -47,7 +47,7 @@ SOURCES += main.cpp \
 HEADERS += \
     RegistryKey.h \
     DisplayEsc.h \
-    Decoder/H264Encoder.h \
+    libx264/H264Encoder.h \
     libyuv/yuv_util.h \
     MirrorDriverClient.h \
     StringStorage.h \
@@ -65,14 +65,14 @@ HEADERS += \
 
 win32: LIBS += -lgdi32 -llibws2_32
 
-LIBS += -L$$PWD/Decoder/lib/ -llibx264 \
+LIBS += -L$$PWD/libx264/lib/ -llibx264 \
                -L$$PWD/IPCamera/lib/ -llibEasyIPCamera \
                 -L$$PWD/libyuv/lib/ -llibyuv
 
 #LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavdevice -lavfilter -lavformat  -lavutil -lpostproc -lswresample -lswscale
 LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavutil -lswscale
 
-INCLUDEPATH += $$PWD/Decoder/include \
+INCLUDEPATH += $$PWD/libx264/include \
                $$PWD/IPCamera/include \
                $$PWD/ffmpeg/include \
                 $$PWD/libyuv/include \
