@@ -16,7 +16,9 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 DEFINES += ENABLED_FFMPEG_ENCODER
-DEFINES += TEST_FPS
+DEFINES += ENABLED_FFMPEG_LOG
+DEFINES += ENABLED_LIBYUV_CONVERT
+DEFINES += ENABLED_TEST_FPS
 
 CONFIG(debug, debug|release) {
 
@@ -31,6 +33,7 @@ CONFIG(debug, debug|release) {
 SOURCES += main.cpp \
     RegistryKey.cpp \
     Decoder/H264Encoder.cpp \
+    libyuv/yuv_util.cpp \
     MirrorDriverClient.cpp \
     StringStorage.cpp \
     PixelFormat.cpp \
@@ -45,6 +48,7 @@ HEADERS += \
     RegistryKey.h \
     DisplayEsc.h \
     Decoder/H264Encoder.h \
+    libyuv/yuv_util.h \
     MirrorDriverClient.h \
     StringStorage.h \
     PixelFormat.h \
@@ -62,7 +66,8 @@ HEADERS += \
 win32: LIBS += -lgdi32 -llibws2_32
 
 LIBS += -L$$PWD/Decoder/lib/ -llibx264 \
-               -L$$PWD/IPCamera/lib/ -llibEasyIPCamera
+               -L$$PWD/IPCamera/lib/ -llibEasyIPCamera \
+                -L$$PWD/libyuv/lib/ -llibyuv
 
 #LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavdevice -lavfilter -lavformat  -lavutil -lpostproc -lswresample -lswscale
 LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavutil -lswscale
@@ -70,5 +75,6 @@ LIBS += -L$$PWD/ffmpeg/lib/ -lavcodec -lavutil -lswscale
 INCLUDEPATH += $$PWD/Decoder/include \
                $$PWD/IPCamera/include \
                $$PWD/ffmpeg/include \
+                $$PWD/libyuv/include \
                $$PWD/thread \
               $$PWD/exception

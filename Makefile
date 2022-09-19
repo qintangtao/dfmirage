@@ -16,23 +16,25 @@
 # 百分号相当于一个通配符
 
 PREFIX 		= ../dfmirage/bin64
-INCLUDES	= -I../dfmirage -I. -I./thread -I./exception -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
+INCLUDES	= -I../dfmirage -I. -I./thread -I./exception -I../dfmirage/libyuv/include -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
 DEFINES		= -DTEST_FPS -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
 # 启用ffmpeg编码
 DEFINES		+= -DENABLED_FFMPEG_ENCODER
 # 启用ffmpeg日志
 #DEFINES		+= -DENABLED_FFMPEG_LOG
 # 计算FPS
-DEFINES		+= -DTEST_FPS
-LINK_OPTS 	= -L../dfmirage/Decoder/libx264-x64/lib -L../dfmirage/IPCamera64/lib -L../dfmirage/ffmpeg64/lib -Lmingw32/i686-w64-mingw32/lib/
-LINK_LIBS 	= -lgdi32 -lws2_32 -llibx264 -llibEasyIPCamera -lavcodec -lavutil -lswscale
+DEFINES		+= -DENABLED_TEST_FPS
+# 使用libyuv转换(RGB32->YV12)
+DEFINES		+= -DENABLED_LIBYUV_CONVERT
+LINK_OPTS 	= -L../dfmirage/libyuv/lib -L../dfmirage/Decoder/libx264-x64/lib -L../dfmirage/IPCamera64/lib -L../dfmirage/ffmpeg64/lib -Lmingw32/i686-w64-mingw32/lib/
+LINK_LIBS 	= -lgdi32 -lws2_32 -llibx264 -llibEasyIPCamera -lavcodec -lavutil -lswscale -llibyuv
 CC 			= g++
 CFLAGS 		= -c -fno-keep-inline-dllexport -O2 -std=gnu++11 -Wall -W -Wextra -fexceptions -mthreads $(DEFINES) $(INCLUDES)
 EXE_NAME 	= EasyScreenCapture
 
 
 
-SRC  := $(wildcard *.cpp Decoder/*.cpp thread/*.cpp exception/*.cpp)
+SRC  := $(wildcard *.cpp Decoder/*.cpp libyuv/*.cpp thread/*.cpp exception/*.cpp)
 OBJS  := $(SRC:%.cpp=%.o)
 
 #all:

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <tchar.h>
 #include "Decoder/H264Encoder.h"
+#include "libyuv/yuv_util.h"
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"
 #include "StopWatch.h"
@@ -275,7 +276,7 @@ unsigned int _stdcall  CaptureMouseThread(void* lParam)
     int widthBytes;
 
     HCURSOR hCursor;
-    HCURSOR lastHCursor;
+    HCURSOR lastHCursor = NULL;
     ICONINFO iconInfo;
     CURSORINFO cursorInfo;
     BITMAP bmMask;
@@ -508,7 +509,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     double                            frameclock = 0;  // 时间基准（按fps计算，每次累加每帧时间，然后修复）
     StopWatch                      watch;
 
-#ifdef TEST_FPS
+#ifdef ENABLED_TEST_FPS
     int                                    index = 0;
     StopWatch                        watchFPS;
     StopWatch                        watchMouse;
@@ -658,7 +659,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                 continue;
             }
 
-#ifdef TEST_FPS
+#ifdef ENABLED_TEST_FPS
             if (index == 0)
                 watchFPS.Start();
 #endif
@@ -747,8 +748,11 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
 #ifdef ENABLED_FFMPEG_ENCODER
 
+#ifdef ENABLED_LIBYUV_CONVERT
+            ARGBToI420((const uint8_t *)src_data[0], width, height, (uint8_t *)frame->data[0]);
+#else
             sws_scale(sws_ctx,src_data,src_linesize,0,height, frame->data,frame->linesize);
-
+#endif
             ret = avcodec_send_frame(c, frame);
             if (ret < 0) {
                 fprintf(stderr, "[channel %d] Could not send frame.\n", nChannelId);
@@ -781,7 +785,11 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
             frame->pts++;
 
 #else
+#ifdef ENABLED_LIBYUV_CONVERT
+            ARGBToI420((const uint8_t *)src_data[0], width, height, (uint8_t *)dst_data[0]);
+#else
             sws_scale(sws_ctx,src_data,src_linesize,0,height, dst_data, dst_linesize);
+#endif
 
             datasize=0;
             keyframe=false;
@@ -815,7 +823,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                     ::MsgWaitForMultipleObjectsEx(0, NULL, dealy, QS_ALLPOSTMESSAGE, MWMO_INPUTAVAILABLE);
             }
 
-#ifdef TEST_FPS
+#ifdef ENABLED_TEST_FPS
             index++;
             if (index>= 1000)
             {
@@ -971,7 +979,11 @@ int main(int argc, char *argv[])
         channels[i].cursorMutex = new LocalMutex();
 
         channels[i].thread = (HANDLE)_beginthreadex(NULL, 0, CaptureScreenThread, (void*)&channels[i],0,0);
+
+#ifndef DIRECT_DRAW_MOUSE
         channels[i].thread_mouse = (HANDLE)_beginthreadex(NULL, 0, CaptureMouseThread, (void*)&channels[i],0,0);
+#endif
+
         channels[i].bThreadLiving		= true;
 
         printf("rtspserver output stream url:	   %s\n", rtsp_url);
@@ -986,6 +998,7 @@ int main(int argc, char *argv[])
     }
     EasyIPCamera_Startup(nServerPort, AUTHENTICATION_TYPE_BASIC,"", (unsigned char*)"", (unsigned char*)"", __EasyIPCamera_Callback, (void *)&channels[0], &liveChannels[0], OutputCount);
 
+     ::Sleep(1000);
     printf("Press Enter exit...\n");
     getchar();
     getchar();
