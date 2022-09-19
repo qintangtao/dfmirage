@@ -17,7 +17,7 @@
 
 PREFIX 		= ../dfmirage/bin64
 INCLUDES	= -I../dfmirage -I. -I./thread -I./exception -I../dfmirage/libyuv/include -I../dfmirage/Decoder/libx264-x64/include -I../dfmirage/IPCamera64/include -I../dfmirage/ffmpeg64/include -Imingw64/include
-DEFINES		= -DTEST_FPS -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
+DEFINES		= -DUNICODE -D_UNICODE -DWIN32 -DMINGW_HAS_SECURE_API=1
 # 启用ffmpeg编码
 DEFINES		+= -DENABLED_FFMPEG_ENCODER
 # 启用ffmpeg日志
