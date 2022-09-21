@@ -1,21 +1,22 @@
 
-#include <windows.h>
 #include <process.h>
 #include <stdio.h>
 #include <tchar.h>
-#include "libx264/H264Encoder.h"
-#include "libyuv/yuv_util.h"
 #include "EasyIPCameraAPI.h"
 #include "MirrorDriverClient.h"
 #include "StopWatch.h"
 #include "AutoLock.h"
 #include "LocalMutex.h"
+#include "libx264/H264Encoder.h"
+#include "libyuv/yuv_util.h"
+#include "jrtplib/JrtpUitls.h"
+#include <windows.h>
 
 extern "C"
 {
     #include "libavcodec/avcodec.h"
     #include "libswscale/swscale.h"
-    #include "libavutil/imgutils.h"
+	#include "libavutil/imgutils.h"
 }
 
 //exe名称固定（EasyIPCamera_RTSP） KEY_EASYIPCAMERA和名称绑定了
@@ -511,6 +512,9 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     HBITMAP                          hbmp = NULL;
 #endif
 
+	JrtpUitls jrtpUtils(6666);
+	jrtpUtils.addDestination("192.168.1.57", 8080);
+
     do
     {
         ret = av_image_alloc(src_data, src_linesize, width, height, srcFormat, 1);
@@ -559,8 +563,12 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
         c->width = width;
         c->height = height;
         /* frames per second */
-        c->time_base = (AVRational){1, fps};
-        c->framerate = (AVRational){fps, 1};
+        //c->time_base = (AVRational){1, fps};
+		c->time_base.num = 1;
+		c->time_base.den = fps;
+        //c->framerate = (AVRational){fps, 1};
+		c->framerate.num = fps;
+		c->framerate.den = 1;
         c->max_b_frames = 1;
         c->pix_fmt = dstFormat;
         c->thread_count = 1;
@@ -769,6 +777,16 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                     break;
                 }
 
+				if (pkt->flags && AV_PKT_FLAG_KEY)
+				{
+					jrtpUtils.sendH264Nalu((unsigned char *)pChannelInfo->mediaInfo.u8Sps, pChannelInfo->mediaInfo.u32SpsLength, true);
+					jrtpUtils.sendH264Nalu((unsigned char *)pChannelInfo->mediaInfo.u8Pps, pChannelInfo->mediaInfo.u32PpsLength, true);
+				}
+
+				//fprintf(stdout, "[channel %d] packet size %d.\n", nChannelId, pkt->size - 4);
+				jrtpUtils.sendH264Nalu((unsigned char *)pkt->data + 4,pkt->size - 4, true);
+
+#if 0
                 EASY_AV_Frame	frame;
                 frame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
                 frame.pBuffer = (Easy_U8*)pkt->data+4;
@@ -777,6 +795,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                 frame.u32TimestampSec = 0;
                 frame.u32TimestampUsec = 0;
                 EasyIPCamera_PushFrame(nChannelId,  &frame);
+#endif
 
                 av_packet_unref(pkt);
             }
@@ -981,6 +1000,8 @@ int main(int argc, char *argv[])
         memcpy(channels[i].mediaInfo.u8Sps, sps,  spslen);			/* 视频sps帧内容 */
         memcpy(channels[i].mediaInfo.u8Pps, pps, ppslen);				/* 视频sps帧内容 */
 
+		channels[i].pushStream = 1;
+
         channels[i].cursorMutex = new LocalMutex();
 
         channels[i].thread = (HANDLE)_beginthreadex(NULL, 0, CaptureScreenThread, (void*)&channels[i],0,0);
@@ -1004,7 +1025,7 @@ int main(int argc, char *argv[])
     }
     EasyIPCamera_Startup(nServerPort, AUTHENTICATION_TYPE_BASIC,"", (unsigned char*)"", (unsigned char*)"", __EasyIPCamera_Callback, (void *)&channels[0], &liveChannels[0], OutputCount);
 
-     ::Sleep(1000);
+    ::Sleep(1000);
     printf("Press Enter exit...\n");
     getchar();
     getchar();

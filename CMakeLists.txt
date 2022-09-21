@@ -25,6 +25,8 @@ SET (CMAKE_BUILD_TYPE Release)
 
 SET (OUTPUT_NAME EasyScreenCapture)
 
+# unknown error
+#PROJECT (${OUTPUT_NAME})
 
 SET (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/bin64)
 
@@ -36,15 +38,17 @@ aux_source_directory(./exception SRC_FILE5)
 include_directories(${CMAKE_SOURCE_DIR}
 					thread
 					exception
+					IPCamera64/include
+					ffmpeg64/include
 					libyuv/include
 					libx264/libx264-x64/include
-					IPCamera64/include
-					ffmpeg64/include)
+					jrtplib/include)
 
 link_directories(libx264/libx264-x64/lib
 					IPCamera64/lib
 					ffmpeg64/lib
-					libyuv/lib)
+					libyuv/lib
+					jrtplib/lib64)
 
 add_executable(${OUTPUT_NAME} ${SRC_FILE} ${SRC_FILE4} ${SRC_FILE5})
 
@@ -58,6 +62,7 @@ target_compile_definitions(${OUTPUT_NAME}
 
 add_subdirectory(libyuv)
 add_subdirectory(libx264)
+add_subdirectory(jrtplib)
 
 target_link_libraries(${OUTPUT_NAME}
 						PRIVATE
@@ -68,4 +73,5 @@ target_link_libraries(${OUTPUT_NAME}
 						avutil
 						swscale
 						yuvUtils
-						libx264Utils)
+						libx264Utils
+						jrtpUtils)

@@ -1,4 +1,4 @@
-//
+﻿//
 // Created by Administrator on 2022/4/14.
 //
 
@@ -171,6 +171,8 @@ typedef struct {//位图文件头,14字节
     uint32_t      bfOffBits;   //   位图数据的起始位置，以相对于位图， 文件头的偏移量表示，以字节为单位
 } BMPFILEHEADER_T;
 
+#pragma pack (pop)
+
 typedef struct{//这个结构的长度是固定的，为40个字节,可以自己算一下，DWORD、LONG4个字节，WORD两个字节
     uint32_t       biSize;//指定这个结构的长度，为40
     uint32_t       biWidth;//指定图象的宽度，单位是象素。
@@ -178,12 +180,13 @@ typedef struct{//这个结构的长度是固定的，为40个字节,可以自己
     uint16_t       biPlanes;//必须是1，不用考虑。
     uint16_t       biBitCount;/*指定表示颜色时要用到的位数，常用的值为1(黑白二色图), 4(16色图),
 							  8(256色), 24(真彩色图)(新的.bmp格式支持32位色，这里就不做讨论了)。*/
-    uint32_t      biCompression;/*指定位图是否压缩，有效的值为BI_RGB，BI_RLE8，BI_RLE4，
+    uint32_t      biCompression;
+	/*指定位图是否压缩，有效的值为BI_RGB，BI_RLE8，BI_RLE4，
 								 BI_BITFIELDS(都是一些Windows定义好的常量)。要说明的是，
 								 Windows位图可以采用RLE4，和RLE8的压缩格式，但用的不多。
 								 我们今后所讨论的只有第一种不压缩的情况，即biCompression为BI_RGB的情况。*/
     uint32_t      biSizeImage;/*指定实际的位图数据占用的字节数，其实也可以从以下的公式中计算出来：
-biSizeImage=biWidth’ × biHeight
+biSizeImage=biWidth * biHeight
 要注意的是：上述公式中的biWidth’必须是4的整倍数(所以不是biWidth，而是biWidth’，
 表示大于或等于biWidth的，最接近4的整倍数。举个例子，如果biWidth=240，则biWidth’=240；
 如果biWidth=241，biWidth’=244)。如果biCompression为BI_RGB，则该项可能为零*/
@@ -192,7 +195,6 @@ biSizeImage=biWidth’ × biHeight
     uint32_t      biClrUsed;//指定本图象实际用到的颜色数，如果该值为零，则用到的颜色数为2的biBitCount指数次幂
     uint32_t      biClrImportant;//指定本图象中重要的颜色数，如果该值为零，则认为所有的颜色都是重要的。
 } BMPINFOHEADER_T;
-#pragma pack (pop)
 
 int saveBMP(const char* name, uint8_t * data, int width, int height, int pixelCount)
 {
@@ -210,7 +212,7 @@ int saveBMP(const char* name, uint8_t * data, int width, int height, int pixelCo
     bfh.bfOffBits = sizeof(BMPFILEHEADER_T) + sizeof(BMPINFOHEADER_T);
 
     // 位图第二部分，数据信息
-    BMPINFOHEADER_T bih;
+	BMPINFOHEADER_T bih;
     bih.biSize = sizeof(BMPINFOHEADER_T);
     bih.biWidth = width;
     bih.biHeight = height;

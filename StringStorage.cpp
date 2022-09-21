@@ -1,9 +1,11 @@
 #include "StringStorage.h"
 #include "Exception.h"
-#include <windows.h>
 #include <stdio.h>
 #include <crtdbg.h>
 #include <algorithm>
+#include <windows.h>
+#undef max
+#undef min
 
 StringStorage::StringStorage()
 {
