@@ -1,4 +1,8 @@
 
+#ifndef SC_SUPPORT_RTP
+#include <windows.h>
+#endif
+
 #include <process.h>
 #include <stdio.h>
 #include <tchar.h>
@@ -9,8 +13,12 @@
 #include "LocalMutex.h"
 #include "libx264/H264Encoder.h"
 #include "libyuv/yuv_util.h"
+
+#ifdef SC_SUPPORT_RTP
 #include "jrtplib/JrtpUitls.h"
 #include <windows.h>
+#endif
+
 
 extern "C"
 {
@@ -291,7 +299,8 @@ unsigned int _stdcall  CaptureMouseThread(void* lParam)
     printf("[channel %d] Mouse Start\n", channelId);
     while (channelInfo->bThreadLiving)
     {
-        ::Sleep(20);
+        //::Sleep(10);
+		USleep(frametime);
         if (channelInfo->pushStream == 0) {
             continue;
         }
@@ -512,8 +521,10 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
     HBITMAP                          hbmp = NULL;
 #endif
 
+#ifdef SC_SUPPORT_RTP
 	JrtpUitls jrtpUtils(6666);
 	jrtpUtils.addDestination("192.168.1.57", 8080);
+#endif
 
     do
     {
@@ -777,6 +788,7 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                     break;
                 }
 
+#ifdef SC_SUPPORT_RTP
 				if (pkt->flags && AV_PKT_FLAG_KEY)
 				{
 					jrtpUtils.sendH264Nalu((unsigned char *)pChannelInfo->mediaInfo.u8Sps, pChannelInfo->mediaInfo.u32SpsLength, true);
@@ -785,8 +797,8 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
 
 				//fprintf(stdout, "[channel %d] packet size %d.\n", nChannelId, pkt->size - 4);
 				jrtpUtils.sendH264Nalu((unsigned char *)pkt->data + 4,pkt->size - 4, true);
+#endif
 
-#if 0
                 EASY_AV_Frame	frame;
                 frame.u32AVFrameFlag = EASY_SDK_VIDEO_FRAME_FLAG;
                 frame.pBuffer = (Easy_U8*)pkt->data+4;
@@ -795,7 +807,6 @@ unsigned int _stdcall  CaptureScreenThread(void* lParam)
                 frame.u32TimestampSec = 0;
                 frame.u32TimestampUsec = 0;
                 EasyIPCamera_PushFrame(nChannelId,  &frame);
-#endif
 
                 av_packet_unref(pkt);
             }
@@ -1000,7 +1011,7 @@ int main(int argc, char *argv[])
         memcpy(channels[i].mediaInfo.u8Sps, sps,  spslen);			/* 视频sps帧内容 */
         memcpy(channels[i].mediaInfo.u8Pps, pps, ppslen);				/* 视频sps帧内容 */
 
-		channels[i].pushStream = 1;
+		//channels[i].pushStream = 1;
 
         channels[i].cursorMutex = new LocalMutex();
 
